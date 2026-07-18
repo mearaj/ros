@@ -1,0 +1,3 @@
+The core architecture, planning, and a substantial portion of the implementation were completed using ChatGPT and Codex during OpenAI Build Week. After exhausting the available promotional credits and additional paid usage, the remaining implementation, testing, and polishing were completed using conventional development tools and other assistants. The repository history and documented Codex sessions show where Codex and GPT-5.6 and other agent were used throughout the project.
+
+Enterprise-grade Restaurant Operating System developed by Mearaj Bhagad, Founder of GOTIGIN SOFTWARE & HARDWARE PRIVATE LIMITED, during OpenAI Build Week using Rust, Flutter, ChatGPT 5.6, Codex, and other AI assistants.

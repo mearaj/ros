@@ -1,0 +1,6 @@
+project_id             = "gotigin-ros-staging"
+region                 = "asia-south1"
+name_prefix            = "ros-staging"
+api_image              = "asia-south1-docker.pkg.dev/PROJECT/ros/api:staging"
+database_secret_id     = "ros-staging-database-url"
+token_pubkey_secret_id = "ros-staging-token-public-key"

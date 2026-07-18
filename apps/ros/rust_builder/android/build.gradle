@@ -1,0 +1,31 @@
+// The Android Gradle Plugin builds the native code with the Android NDK. Its
+// version is owned once by the host application's plugin-management block.
+plugins {
+    id 'com.android.library'
+}
+
+group = 'com.flutter_rust_bridge.rust_lib_ros'
+version = '1.0.0'
+
+android {
+    namespace = 'com.flutter_rust_bridge.rust_lib_ros'
+    compileSdk = 36
+
+    // Keep this aligned with Flutter 3.44.6's pinned Android toolchain.
+    ndkVersion = '28.2.13676358'
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        minSdk = 24
+    }
+}
+
+apply from: "../cargokit/gradle/plugin.gradle"
+cargokit {
+    manifestDir = "../../rust"
+    libname = "rust_lib_ros"
+}

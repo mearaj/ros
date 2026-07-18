@@ -1,0 +1,11 @@
+# Copy this file to android/key.properties only in a controlled build
+# environment. It is intentionally ignored by Git; never commit a keystore,
+# its passwords, or an exported signing key.
+#
+# Use an absolute path to a private keystore owned by Gotigin's release
+# process. Android/iOS remain unsupported release targets until their secure
+# storage adapters and signed-device acceptance tests are complete.
+storeFile=/absolute/path/to/gotigin-restaurant-os-release.jks
+storePassword=replace-in-controlled-build-environment
+keyAlias=gotigin-restaurant-os
+keyPassword=replace-in-controlled-build-environment

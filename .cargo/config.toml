@@ -1,0 +1,6 @@
+[env]
+# SQLCipher connections are intentionally exercised against real encrypted
+# files. The bundled native development path is not safe under the test
+# harness's parallel file/key-store stress, so repository tests run serially.
+# Production concurrency is validated at the transaction boundary separately.
+RUST_TEST_THREADS = "1"

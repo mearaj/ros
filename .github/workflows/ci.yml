@@ -1,0 +1,358 @@
+name: Verify Restaurant Operating System
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # These are deliberately release artifacts, not moving channels. The Flutter
+  # archive checksum is from the official release manifest dated 2026-07-09.
+  RUST_TOOLCHAIN: "1.97.0"
+  FLUTTER_VERSION: "3.44.6"
+  FLUTTER_ARCHIVE_URL: "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.44.6-stable.tar.xz"
+  FLUTTER_ARCHIVE_SHA256: "a6320fd72e9a2690c08e2a6a70874a30cb120dee7c78f49d2c628bd7c9e20525"
+  FLUTTER_WINDOWS_ARCHIVE_URL: "https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.44.6-stable.zip"
+  FLUTTER_WINDOWS_ARCHIVE_SHA256: "2e803e240c981733ec6b543752415196ff1b16e03f93474bddd59c777ac07a56"
+  FRB_CODEGEN_VERSION: "2.12.0"
+  CI: "true"
+
+jobs:
+  verify-cloud-schema:
+    name: Professional cloud schema verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    # This is an isolated CI-only PostgreSQL service. It has no cloud account,
+    # deployment credentials, external network address, or persistent volume.
+    services:
+      postgres:
+        # Docker Official Image `18.4-alpine`, pinned to its multi-platform
+        # index digest so a mutable tag cannot change CI's database input.
+        image: postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+        env:
+          POSTGRES_DB: ros_ci
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --dbname=ros_ci --username=postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Check out source
+        # actions/checkout v4.3.0
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Install pinned Rust toolchain
+        # dtolnay/rust-toolchain stable branch, resolved to this immutable
+        # commit on 2026-07-17. The compiler version is pinned independently.
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Cache Rust dependencies
+        # Swatinem/rust-cache v2
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        with:
+          cache-targets: false
+          cache-bin: false
+
+      - name: Apply and verify cloud migrations in disposable PostgreSQL
+        shell: bash
+        env:
+          ROS_ALLOW_CLOUD_SCHEMA_TESTS: "1"
+          ROS_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ros_ci?sslmode=disable
+        run: ./scripts/verify-cloud-migrations.sh
+
+      - name: Apply cloud migrations to the disposable integration schema
+        shell: bash
+        env:
+          ROS_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ros_ci?sslmode=disable
+        run: |
+          set -euo pipefail
+          for migration in database/cloud-migrations/[0-9][0-9][0-9][0-9]_*.sql; do
+            psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+              "$ROS_TEST_DATABASE_URL" --single-transaction --file "$migration"
+          done
+
+      - name: Verify Professional sync transactions and schema admission
+        shell: bash
+        env:
+          ROS_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ros_ci?sslmode=disable
+        run: cargo test --locked -p api -- --ignored
+
+  verify:
+    name: Rust, Flutter, and native desktop verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        # actions/checkout v4.3.0
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Reject committed credential material
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep failures non-disclosing: CI must not echo a possible secret.
+          patterns=(
+            'AKIA[0-9A-Z]{16}'
+            'ASIA[0-9A-Z]{16}'
+            'aws_secret_access_key[[:space:]]*[:=]'
+            '-----BEGIN( [A-Z0-9]+)? PRIVATE KEY-----'
+            'gh[pousr]_[A-Za-z0-9_]{36,}'
+            'github_pat_[A-Za-z0-9_]{22,}'
+            'xox[baprs]-[A-Za-z0-9-]{10,}'
+            'AIza[0-9A-Za-z_-]{20,}'
+          )
+          for pattern in "${patterns[@]}"; do
+            if git grep -I -q -E -e "$pattern" -- .; then
+              echo '::error::Potential credential material detected. Remove and rotate it before committing.'
+              exit 1
+            fi
+          done
+
+      - name: Require the workspace lockfile as the sole Rust lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -e apps/ros/rust/Cargo.lock ]]; then
+            echo '::error file=apps/ros/rust/Cargo.lock::Nested Cargo.lock files are forbidden. Use the repository-root workspace Cargo.lock only.'
+            exit 1
+          fi
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang cmake curl jq libgtk-3-dev liblzma-dev ninja-build pkg-config xz-utils
+
+      - name: Install pinned Rust toolchain
+        # dtolnay/rust-toolchain stable branch, resolved to this immutable
+        # commit on 2026-07-17. The installed compiler is pinned independently.
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy,rustfmt
+
+      - name: Cache Rust dependencies
+        # Swatinem/rust-cache v2
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        with:
+          # Keep compiler output and installed binaries out of CI cache. The
+          # only cacheable material is fetched dependency source, while every
+          # verification job compiles the current, locked workspace afresh.
+          cache-targets: false
+          cache-bin: false
+
+      - name: Bootstrap checksum-verified Flutter
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/flutter_${FLUTTER_VERSION}_linux.tar.xz"
+          destination="$RUNNER_TEMP/flutter-sdk"
+          install -d "$destination"
+          curl --fail --location --retry 3 --retry-all-errors --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --output "$archive" "$FLUTTER_ARCHIVE_URL"
+          printf '%s  %s\n' "$FLUTTER_ARCHIVE_SHA256" "$archive" | sha256sum --strict --check --status
+          tar --extract --xz --file "$archive" --directory "$destination"
+
+          flutter_bin="$destination/flutter/bin/flutter"
+          [[ -x "$flutter_bin" ]]
+          actual_version="$("$flutter_bin" --version --machine | jq --raw-output '.frameworkVersion')"
+          [[ "$actual_version" == "$FLUTTER_VERSION" ]]
+          echo "$destination/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Verify Rust linting
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        run: cargo test --locked --workspace
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/ros
+        run: flutter pub get --enforce-lockfile
+
+      - name: Install pinned Flutter Rust Bridge generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          generator_root="$RUNNER_TEMP/flutter-rust-bridge-codegen"
+          cargo install --locked --root "$generator_root" --version "$FRB_CODEGEN_VERSION" flutter_rust_bridge_codegen
+          echo "$generator_root/bin" >> "$GITHUB_PATH"
+
+      - name: Verify generated Flutter/Rust bridge is fresh
+        working-directory: apps/ros
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter_rust_bridge_codegen generate
+          git diff --exit-code -- \
+            lib/src/rust/frb_generated.dart \
+            lib/src/rust/frb_generated.io.dart \
+            lib/src/rust/frb_generated.web.dart \
+            rust/src/frb_generated.rs
+
+      - name: Verify Dart formatting
+        working-directory: apps/ros
+        run: dart format --output=none --set-exit-if-changed lib test integration_test
+
+      - name: Analyze Flutter
+        working-directory: apps/ros
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        working-directory: apps/ros
+        run: flutter test
+
+      - name: Run Flutter/Rust integration smoke test
+        working-directory: apps/ros
+        run: flutter test integration_test
+
+      - name: Build Linux desktop application
+        working-directory: apps/ros
+        run: flutter build linux --debug
+
+      - name: Record verification evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_directory="$RUNNER_TEMP/verification-evidence"
+          install -d "$evidence_directory"
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "rust_toolchain=$RUST_TOOLCHAIN"
+            rustc -Vv
+            cargo -V
+            flutter --version --machine | jq --compact-output .
+            echo "flutter_archive_sha256=$FLUTTER_ARCHIVE_SHA256"
+            flutter_rust_bridge_codegen --version
+            sha256sum \
+              Cargo.lock \
+              apps/ros/pubspec.lock \
+              apps/ros/lib/src/rust/frb_generated.dart \
+              apps/ros/lib/src/rust/frb_generated.io.dart \
+              apps/ros/lib/src/rust/frb_generated.web.dart \
+              apps/ros/rust/src/frb_generated.rs
+          } > "$evidence_directory/inputs.txt"
+
+      - name: Upload verification evidence
+        if: always()
+        # actions/upload-artifact v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verification-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/verification-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+  verify-windows-debug:
+    name: Windows x64 Debug verification
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        # actions/checkout v4.3.0
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Require the workspace lockfile as the sole Rust lockfile
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path 'apps/ros/rust/Cargo.lock') {
+            throw 'Nested Cargo.lock files are forbidden. Use the repository-root workspace Cargo.lock only.'
+          }
+
+      - name: Install pinned Rust toolchain
+        # dtolnay/rust-toolchain stable branch, resolved to this immutable
+        # commit on 2026-07-17. The installed compiler is pinned independently.
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy,rustfmt
+
+      - name: Bootstrap checksum-verified Flutter
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP ('flutter_{0}_windows.zip' -f $env:FLUTTER_VERSION)
+          $destination = Join-Path $env:RUNNER_TEMP 'flutter-sdk'
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          Invoke-WebRequest -Uri $env:FLUTTER_WINDOWS_ARCHIVE_URL -OutFile $archive -MaximumRedirection 3
+          $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          if ($actualHash -ne $env:FLUTTER_WINDOWS_ARCHIVE_SHA256) {
+            throw 'Flutter archive checksum verification failed.'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination
+          $flutterBin = Join-Path $destination 'flutter\bin'
+          $flutter = Join-Path $flutterBin 'flutter.bat'
+          if (!(Test-Path -LiteralPath $flutter)) {
+            throw 'The verified Flutter archive did not contain flutter.bat.'
+          }
+          $actualVersion = (& $flutter --version --machine | ConvertFrom-Json).frameworkVersion
+          if ($actualVersion -ne $env:FLUTTER_VERSION) {
+            throw 'Flutter framework version did not match the pinned release.'
+          }
+          $flutterBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Verify Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Verify Rust linting
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        run: cargo test --locked --workspace
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/ros
+        run: flutter pub get --enforce-lockfile
+
+      - name: Verify Dart formatting
+        working-directory: apps/ros
+        run: dart format --output=none --set-exit-if-changed lib test integration_test
+
+      - name: Analyze Flutter
+        working-directory: apps/ros
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        working-directory: apps/ros
+        run: flutter test
+
+      - name: Run Flutter/Rust integration smoke test
+        working-directory: apps/ros
+        run: flutter test integration_test
+
+      - name: Build Windows desktop Development application
+        working-directory: apps/ros
+        run: flutter build windows --debug

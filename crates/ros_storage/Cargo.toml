@@ -1,0 +1,44 @@
+[package]
+name = "ros_storage"
+version.workspace = true
+edition.workspace = true
+build = "build.rs"
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Encrypted local storage for Gotigin Restaurant Operating System"
+
+[dependencies]
+aes-gcm = "=0.10.3"
+argon2 = "=0.5.3"
+getrandom = { version = "=0.4.3", optional = true }
+keyring = { version = "=4.1.5", default-features = false, features = ["v1"], optional = true }
+rand_core = { version = "=0.6.4", features = ["getrandom"] }
+ros_core = { path = "../ros_core" }
+ros_sqlcipher_ffi = { path = "../ros_sqlcipher_ffi", default-features = false }
+rusqlite = { version = "0.40.1", default-features = false, features = ["backup"] }
+serde_json = "=1.0.150"
+sha2 = "=0.10.9"
+url = "=2.5.8"
+zeroize = "=1.9.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[features]
+# Development and Linux CI compile the SQLCipher source into the app. The
+# Windows production pipeline must instead link the reviewed, pinned SQLCipher
+# library through the production-sqlcipher feature.
+default = ["development-bundled-sqlcipher", "platform-keyring"]
+development-bundled-sqlcipher = [
+    "ros_sqlcipher_ffi/development-bundled-sqlcipher",
+    "rusqlite/bundled-sqlcipher-vendored-openssl",
+]
+production-sqlcipher = [
+    "ros_sqlcipher_ffi/production-sqlcipher",
+    "rusqlite/sqlcipher",
+]
+platform-keyring = ["dep:getrandom", "dep:keyring"]
+
+[lints]
+workspace = true

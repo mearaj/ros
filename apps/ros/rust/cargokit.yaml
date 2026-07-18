@@ -1,0 +1,26 @@
+# Cargokit resolves the feature graph for each Flutter build configuration.
+# Debug is intentionally a disposable, isolated development environment.
+# Profile and release must use the production linkage graph; they fail closed
+# until the reviewed SQLCipher 4.17 release artifact is supplied.
+cargo:
+  debug:
+    toolchain: "1.97.0"
+    extra_flags:
+      - "--locked"
+      - "--no-default-features"
+      - "--features"
+      - "development-sqlcipher"
+  profile:
+    toolchain: "1.97.0"
+    extra_flags:
+      - "--locked"
+      - "--no-default-features"
+      - "--features"
+      - "production-sqlcipher"
+  release:
+    toolchain: "1.97.0"
+    extra_flags:
+      - "--locked"
+      - "--no-default-features"
+      - "--features"
+      - "production-sqlcipher"

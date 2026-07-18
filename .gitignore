@@ -1,0 +1,74 @@
+# Rust
+/target/
+**/target/
+*.pdb
+
+# Flutter and Dart
+**/.dart_tool/
+**/.packages
+**/build/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub/
+**/.pub-preload-cache/
+**/coverage/
+*.lcov
+.fvm/flutter_sdk
+.fvm/versions/
+.fvm/release
+.fvm/version
+
+# flutter_rust_bridge occasionally drops empty placeholder files
+NONE
+
+# IDE and operating-system files
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+*.orig
+.history/
+
+# Shared editor configs may be committed; ignore only local/user noise.
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+
+# Python / Node tooling (scripts and optional local helpers)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+node_modules/
+
+# Local restaurant data, secrets, and release artifacts
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.bak
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+**/key.properties
+!**/key.properties.example
+.env
+.env.*
+!.env.example
+!**/.env.example
+verified-backups/
+**/diagnostics/
+/artifacts/

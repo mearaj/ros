@@ -1,0 +1,19 @@
+[package]
+name = "ros_sync_client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Desktop Professional sync upload client for Restaurant Operating System"
+
+[dependencies]
+ros_core = { path = "../ros_core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "=1.0.150"
+ureq = { version = "=3.0.12", default-features = false, features = ["rustls"] }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

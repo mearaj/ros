@@ -1,0 +1,94 @@
+:root {
+  --ink: #1c1917;
+  --paper: #faf7f2;
+  --accent: #0f766e;
+  --line: rgba(28, 25, 23, 0.12);
+  --panel: rgba(255, 255, 255, 0.72);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.16), transparent 40%),
+    linear-gradient(180deg, #efe8dc, var(--paper));
+  min-height: 100vh;
+}
+
+.hero {
+  padding: 3rem 1.5rem 1.5rem;
+  max-width: 56rem;
+  margin: 0 auto;
+}
+
+.brand {
+  font-size: 1.75rem;
+  letter-spacing: 0.02em;
+  margin: 0 0 0.75rem;
+}
+
+h1 {
+  font-size: clamp(2rem, 4vw, 3rem);
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.lede {
+  max-width: 36rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 3rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 1rem 1.25rem;
+  backdrop-filter: blur(8px);
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
+}
+
+input {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+button {
+  font: inherit;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+}
+
+.status {
+  min-height: 1.25rem;
+}
+
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  font-size: 0.9rem;
+}

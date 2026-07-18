@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Restaurant Operating System — Owner Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <p class="brand">Gotigin Restaurant Operating System</p>
+      <h1>Professional owner dashboard</h1>
+      <p class="lede">
+        Organization, branches, devices, sync health, and consolidated sales.
+      </p>
+    </header>
+    <main>
+      <section class="panel">
+        <h2>Connection</h2>
+        <label>
+          API base URL
+          <input id="apiBase" type="url" value="http://127.0.0.1:3000" />
+        </label>
+        <label>
+          Owner bearer token
+          <input id="token" type="password" autocomplete="off" />
+        </label>
+        <button id="refresh" type="button">Refresh</button>
+        <p id="status" class="status" role="status"></p>
+      </section>
+      <section class="panel">
+        <h2>Organization</h2>
+        <pre id="organization"></pre>
+      </section>
+      <section class="panel">
+        <h2>Branches</h2>
+        <pre id="branches"></pre>
+      </section>
+      <section class="panel">
+        <h2>Devices</h2>
+        <pre id="devices"></pre>
+        <label>
+          Device ID to revoke
+          <input id="revokeDeviceId" type="text" />
+        </label>
+        <button id="revoke" type="button">Revoke device</button>
+      </section>
+      <section class="panel">
+        <h2>Sync health</h2>
+        <pre id="syncHealth"></pre>
+      </section>
+      <section class="panel">
+        <h2>Consolidated sales</h2>
+        <pre id="sales"></pre>
+      </section>
+      <section class="panel">
+        <h2>Cloud backups</h2>
+        <pre id="backups"></pre>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

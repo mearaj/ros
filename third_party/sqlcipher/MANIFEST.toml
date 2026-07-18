@@ -1,0 +1,13 @@
+# Placeholder only — not a publishable artifact set.
+# Replace reviewed_by / reviewed_at_utc / sha256 values when binaries land.
+schema_version = 1
+sqlcipher_version = "4.17.0"
+openssl_fips_note = "awaiting reviewed production build"
+reviewed_by = ""
+reviewed_at_utc = ""
+
+# [[artifact]]
+# target = "x86_64-unknown-linux-gnu"
+# path = "linux-x86_64/libsqlcipher.a"
+# sha256 = ""
+# provenance_url = ""

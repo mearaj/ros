@@ -1,0 +1,327 @@
+openapi: 3.1.1
+info:
+  title: Gotigin Restaurant Operating System Professional API
+  version: 0.1.0
+  description: |
+    Provider-neutral contract for the Professional sync boundary. The
+    repository contains a feature-gated authenticated route, a tested
+    batch-envelope validator, and a PostgreSQL transaction adapter. Sync is
+    disabled by default, has no production issuer or provisioning workflow,
+    has only passed the repository's disposable PostgreSQL integration suite,
+    and is not represented as deployed here.
+servers: []
+paths:
+  /healthz:
+    get:
+      operationId: live
+      responses:
+        '200': { description: Process is live; no dependency readiness is implied }
+  /readyz:
+    get:
+      operationId: ready
+      responses:
+        '200': { description: Runtime configuration is valid; enabled sync storage, if any, is reachable and exposes the required schema contract }
+        '503': { description: Enabled Professional sync storage is unavailable, incomplete, or missing a required security object }
+  /v1/sync/operations:batch:
+    post:
+      operationId: submitSyncBatch
+      security: [{ bearerAuth: [] }]
+      description: |
+        Feature-gated tenant-scoped sync endpoint. The route is registered but
+        returns 503 while Professional sync is disabled. When enabled, the
+        device token is verified and subjected to a bounded local admission
+        window before the required schema contract is rechecked. The body is
+        parsed only after those gates, and the persistence transaction must load and hold the durable anchor for the
+        authenticated device. New operations must form the anchor's exact
+        contiguous successor. Exact replays return their original stable
+        acknowledgement; conflicting identities or content fail. Duplicate
+        operation IDs and audit-event IDs within one request are invalid.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncBatchRequest'
+      responses:
+        '200':
+          description: |
+            Stable acknowledgements returned only after immutable accepted
+            facts commit durably. Any future reporting projection must commit
+            in the same transaction before this response is emitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncBatchAcknowledgements'
+        '400':
+          description: |
+            Invalid envelope: malformed canonical field, duplicate identity
+            within the batch, invalid hash, or chain discontinuity.
+        '401': { description: Missing or invalid configured device bearer token }
+        '403': { description: Tenant, branch, device, or actor authorization denied }
+        '409':
+          description: |
+            Existing idempotency record, audit identity, or durable chain
+            conflicts with the submitted fact.
+        '413': { description: Request exceeds the bounded transport body size }
+        '429':
+          description: Authenticated device exceeded the configured local admission window; Retry-After contains whole seconds
+        '503': { description: Professional sync is disabled, durable storage is unavailable, or the required schema contract is not ready }
+  /v1/owner/organization:
+    get:
+      operationId: ownerOrganization
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Organization and entitlement overview }
+        '401': { description: Missing or invalid bearer token }
+        '503': { description: Professional runtime unavailable }
+  /v1/owner/branches:
+    get:
+      operationId: ownerBranches
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Branch list and writability metadata }
+        '401': { description: Missing or invalid bearer token }
+        '503': { description: Professional runtime unavailable }
+  /v1/owner/devices:
+    get:
+      operationId: ownerDevices
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Registered devices and sync status }
+        '401': { description: Missing or invalid bearer token }
+        '503': { description: Professional runtime unavailable }
+  /v1/owner/devices/{device_id}/revocations:
+    post:
+      operationId: ownerRevokeDevice
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: device_id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 3 }
+      responses:
+        '200': { description: Device revocation recorded }
+        '400': { description: Invalid revocation reason }
+        '401': { description: Missing or invalid bearer token }
+        '503': { description: Professional runtime unavailable }
+  /v1/owner/sync-health:
+    get:
+      operationId: ownerSyncHealth
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Sync backlog and acknowledgement health }
+        '401': { description: Missing or invalid bearer token }
+        '503': { description: Professional sync schema not ready }
+  /v1/owner/sales/summary:
+    get:
+      operationId: ownerSalesSummary
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Consolidated sales summary }
+        '401': { description: Missing or invalid bearer token }
+        '503': { description: Professional runtime unavailable }
+  /v1/owner/backups:
+    get:
+      operationId: ownerCloudBackups
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Cloud backup metadata list }
+        '401': { description: Missing or invalid bearer token }
+        '503': { description: Professional runtime unavailable }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Short-lived Ed25519 device JWT issued by the configured authority. It
+        binds organization, branch, device, token identity, and sync:write
+        permission; source control contains no production issuer or key.
+  schemas:
+    CanonicalUuidV7:
+      type: string
+      format: uuid
+      minLength: 36
+      maxLength: 36
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      description: |
+        Lowercase, hyphenated RFC 4122 UUID version 7. Uppercase, compact,
+        braced, non-v7, and non-RFC-4122-variant representations are invalid.
+    PositiveAuditSequence:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 9223372036854775806
+      description: |
+        Positive device-local sequence. The upper i64 value is excluded so a
+        valid event always leaves room for a successor.
+    CanonicalEventType:
+      type: string
+      minLength: 1
+      maxLength: 200
+      pattern: '^[a-z][a-z0-9._-]{0,199}$'
+      description: |
+        ASCII lowercase event type of at most 200 bytes. It begins with a
+        lowercase letter; later bytes may be lowercase letters, digits, dot,
+        underscore, or hyphen.
+    CanonicalCompactJsonPayload:
+      type: string
+      minLength: 1
+      maxLength: 1048576
+      contentMediaType: application/json
+      description: |
+        A JSON text string whose exact bytes equal
+        serde_json::to_string(serde_json::from_str(payload_json)). It must
+        contain no non-canonical whitespace or serialization and must be at
+        most 1,048,576 UTF-8 bytes. The byte cap and exact canonicalization
+        are enforced by the runtime validator; JSON Schema string lengths are
+        character counts and cannot express the UTF-8 byte rule exactly.
+    CanonicalUtcMillisecondTimestamp:
+      type: string
+      format: date-time
+      minLength: 24
+      maxLength: 24
+      pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+      description: |
+        Valid RFC 3339 UTC instant in the exact
+        YYYY-MM-DDTHH:mm:ss.sssZ form: uppercase T and Z, exactly three
+        fractional digits, and no offset.
+    StandardBase64Hash32:
+      type: string
+      contentEncoding: base64
+      contentMediaType: application/octet-stream
+      minLength: 44
+      maxLength: 44
+      pattern: '^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$'
+      description: |
+        Canonical padded RFC 4648 standard Base64 for exactly 32 decoded
+        bytes. URL-safe alphabets, omitted padding, invalid pad bits, and any
+        non-canonical re-encoding are rejected.
+    SyncOperationRequest:
+      type: object
+      required:
+        - operation_id
+        - audit_event_id
+        - actor_id
+        - sequence
+        - event_type
+        - payload_json
+        - occurred_at_utc
+        - event_hash
+      properties:
+        operation_id:
+          allOf:
+            - $ref: '#/components/schemas/CanonicalUuidV7'
+          description: Immutable transport idempotency identity.
+        audit_event_id:
+          allOf:
+            - $ref: '#/components/schemas/CanonicalUuidV7'
+          description: Immutable audit-fact identity.
+        actor_id:
+          allOf:
+            - $ref: '#/components/schemas/CanonicalUuidV7'
+          description: |
+            Immutable staff or system actor identity. It is an input to the
+            audit hash and must be authorized for the branch by the
+            authenticated transport.
+        sequence:
+          $ref: '#/components/schemas/PositiveAuditSequence'
+        event_type:
+          $ref: '#/components/schemas/CanonicalEventType'
+        payload_json:
+          $ref: '#/components/schemas/CanonicalCompactJsonPayload'
+        occurred_at_utc:
+          $ref: '#/components/schemas/CanonicalUtcMillisecondTimestamp'
+        previous_hash:
+          allOf:
+            - $ref: '#/components/schemas/StandardBase64Hash32'
+          description: |
+            Omit only when the durable per-device anchor is empty. Otherwise
+            it must exactly equal the anchor or preceding operation hash.
+        event_hash:
+          allOf:
+            - $ref: '#/components/schemas/StandardBase64Hash32'
+          description: |
+            Hash of the exact canonical envelope, including batch branch and
+            device identities, actor_id, sequence, event_type, payload_json,
+            occurred_at_utc, and previous_hash.
+    SyncBatchRequest:
+      type: object
+      required: [branch_id, device_id, operations]
+      properties:
+        branch_id:
+          allOf:
+            - $ref: '#/components/schemas/CanonicalUuidV7'
+          description: |
+            Authenticated branch identity. It applies to every operation and
+            is included in each operation's audit hash.
+        device_id:
+          allOf:
+            - $ref: '#/components/schemas/CanonicalUuidV7'
+          description: |
+            Authenticated device identity and the scope of the durable
+            sequence/hash anchor. It is included in every audit hash.
+        operations:
+          type: array
+          minItems: 1
+          maxItems: 200
+          description: |
+            A single ordered, contiguous candidate suffix for one device.
+            Duplicate operation_id values and duplicate audit_event_id values
+            are rejected by the runtime validator even when the objects are
+            otherwise different; JSON Schema cannot express that keyed
+            uniqueness rule.
+          items:
+            $ref: '#/components/schemas/SyncOperationRequest'
+    SyncAcknowledgement:
+      type: object
+      required:
+        - operation_id
+        - audit_event_id
+        - server_event_id
+        - accepted_at_utc
+        - disposition
+      properties:
+        operation_id:
+          allOf:
+            - $ref: '#/components/schemas/CanonicalUuidV7'
+          description: Submitted idempotency key.
+        audit_event_id:
+          allOf:
+            - $ref: '#/components/schemas/CanonicalUuidV7'
+          description: Accepted immutable audit-fact identity.
+        server_event_id:
+          allOf:
+            - $ref: '#/components/schemas/CanonicalUuidV7'
+          description: |
+            Stable server-generated durable cloud identity. A replay of the
+            same accepted operation must never return a different value.
+        accepted_at_utc:
+          allOf:
+            - $ref: '#/components/schemas/CanonicalUtcMillisecondTimestamp'
+          description: Server acceptance time retained for every replay.
+        disposition:
+          type: string
+          enum: [accepted, already_accepted]
+          description: Whether the transaction created the fact or replayed it.
+    SyncBatchAcknowledgements:
+      type: object
+      required: [acknowledgements]
+      properties:
+        acknowledgements:
+          type: array
+          minItems: 1
+          maxItems: 200
+          description: One stable acknowledgement per submitted operation, in request order.
+          items:
+            $ref: '#/components/schemas/SyncAcknowledgement'

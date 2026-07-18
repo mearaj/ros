@@ -1,0 +1,24 @@
+[package]
+name = "ros_sqlcipher_ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Narrow, reviewed SQLCipher keying boundary for Gotigin Restaurant Operating System"
+
+[dependencies]
+rusqlite = { version = "0.40.1", default-features = false }
+
+[features]
+# This crate is intentionally the only place where the SQLCipher C API is
+# called. It receives the same SQLCipher feature as ros_storage.
+default = ["development-bundled-sqlcipher"]
+development-bundled-sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
+production-sqlcipher = ["rusqlite/sqlcipher"]
+
+[lints.rust]
+# `unsafe` is denied by default, then allowed for the single reviewed FFI call
+# below. Keeping this crate outside the workspace-wide `forbid` lint prevents
+# unsafe code from spreading through the domain and storage crates.
+unsafe_code = "deny"
