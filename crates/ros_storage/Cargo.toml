@@ -9,7 +9,7 @@ repository.workspace = true
 description = "Encrypted local storage for Gotigin Restaurant Operating System"
 
 [dependencies]
-aes-gcm = "=0.10.3"
+aes-gcm = "=0.11.0"
 argon2 = "=0.5.3"
 getrandom = { version = "=0.4.3", optional = true }
 keyring = { version = "=4.1.5", default-features = false, features = ["v1"], optional = true }
