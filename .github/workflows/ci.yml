@@ -147,7 +147,7 @@ jobs:
       - name: Install Linux desktop build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang cmake curl jq libgtk-3-dev liblzma-dev ninja-build pkg-config xz-utils
+          sudo apt-get install --yes clang cmake curl jq libgtk-3-dev liblzma-dev ninja-build pkg-config xvfb xz-utils
 
       - name: Install pinned Rust toolchain
         # dtolnay/rust-toolchain stable branch, resolved to this immutable
@@ -234,7 +234,7 @@ jobs:
 
       - name: Run Flutter/Rust integration smoke test
         working-directory: apps/ros
-        run: flutter test integration_test
+        run: xvfb-run --auto-servernum flutter test integration_test
 
       - name: Build Linux desktop application
         working-directory: apps/ros

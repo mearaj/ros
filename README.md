@@ -1,9 +1,6 @@
 # Gotigin Restaurant Operating System
 
-Restaurant Operating System is Gotigin Software & Hardware Private Limited's
-local-first operating platform for restaurants. It is being delivered during
-OpenAI Build Week, but it is a company product rather than a hackathon-only
-proof of concept.
+Restaurant Operating System (ROS) is an enterprise-grade commercial product developed by Mearaj Bhagad, Founder of GOTIGIN SOFTWARE & HARDWARE PRIVATE LIMITED, during OpenAI Build Week. Unlike a typical hackathon prototype, ROS is designed as a production-ready platform and is used to support our real-world restaurant operations. The project was developed with Rust, Flutter, ChatGPT 5.6, Codex, and other AI assistants to accelerate engineering while maintaining production-quality standards.
 
 ## Product editions
 
