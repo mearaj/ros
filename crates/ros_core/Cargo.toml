@@ -6,6 +6,6 @@ description = "Trusted domain core for Gotigin Restaurant Operating System"
 license.workspace = true
 
 [dependencies]
-sha2 = "=0.10.9"
+sha2 = "=0.11.0"
 unicode-normalization = "=0.1.25"
 uuid = { version = "=1.24.0", features = ["v7"] }

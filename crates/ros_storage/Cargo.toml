@@ -18,7 +18,7 @@ ros_core = { path = "../ros_core" }
 ros_sqlcipher_ffi = { path = "../ros_sqlcipher_ffi", default-features = false }
 rusqlite = { version = "0.40.1", default-features = false, features = ["backup"] }
 serde_json = "=1.0.150"
-sha2 = "=0.10.9"
+sha2 = "=0.11.0"
 url = "=2.5.8"
 zeroize = "=1.9.0"
 
