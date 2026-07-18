@@ -145,9 +145,9 @@ pub fn unwrap_database_key(
     let cipher = Aes256Gcm::new_from_slice(wrapping_key.as_slice())
         .map_err(|_| StorageError::InvalidPersistedData("cipher init failed".to_owned()))?;
     let nonce = Nonce::from_slice(&nonce);
-    let plaintext = cipher
-        .decrypt(nonce, ciphertext.as_ref())
-        .map_err(|_| StorageError::InvalidPersistedData("recovery passphrase rejected".to_owned()))?;
+    let plaintext = cipher.decrypt(nonce, ciphertext.as_ref()).map_err(|_| {
+        StorageError::InvalidPersistedData("recovery passphrase rejected".to_owned())
+    })?;
     if plaintext.len() != 32 {
         return Err(StorageError::InvalidPersistedData(
             "unwrapped key length invalid".to_owned(),
@@ -179,7 +179,10 @@ fn recovery_argon2() -> Result<Argon2<'static>, StorageError> {
     Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, parameters))
 }
 
-fn derive_wrapping_key(passphrase: &str, salt: &[u8; 16]) -> Result<Zeroizing<[u8; 32]>, StorageError> {
+fn derive_wrapping_key(
+    passphrase: &str,
+    salt: &[u8; 16],
+) -> Result<Zeroizing<[u8; 32]>, StorageError> {
     let mut key = Zeroizing::new([0_u8; 32]);
     recovery_argon2()?
         .hash_password_into(passphrase.as_bytes(), salt, key.as_mut())
@@ -206,9 +209,8 @@ fn hex_decode(value: &str) -> Result<Vec<u8>, StorageError> {
     (0..value.len())
         .step_by(2)
         .map(|index| {
-            u8::from_str_radix(&value[index..index + 2], 16).map_err(|_| {
-                StorageError::InvalidPersistedData("invalid hex encoding".to_owned())
-            })
+            u8::from_str_radix(&value[index..index + 2], 16)
+                .map_err(|_| StorageError::InvalidPersistedData("invalid hex encoding".to_owned()))
         })
         .collect()
 }
@@ -231,12 +233,16 @@ mod tests {
             "actor-1",
         )
         .expect("wrap");
-        let opened = unwrap_database_key(&envelope.envelope_json, passphrase, "sha256:abc")
-            .expect("unwrap");
+        let opened =
+            unwrap_database_key(&envelope.envelope_json, passphrase, "sha256:abc").expect("unwrap");
         assert_eq!(opened, key);
         assert!(
-            unwrap_database_key(&envelope.envelope_json, "wrong-recovery-passphrase!!", "sha256:abc")
-                .is_err()
+            unwrap_database_key(
+                &envelope.envelope_json,
+                "wrong-recovery-passphrase!!",
+                "sha256:abc"
+            )
+            .is_err()
         );
     }
 }

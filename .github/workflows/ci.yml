@@ -318,7 +318,15 @@ jobs:
           if (!(Test-Path -LiteralPath $flutter)) {
             throw 'The verified Flutter archive did not contain flutter.bat.'
           }
-          $actualVersion = (& $flutter --version --machine | ConvertFrom-Json).frameworkVersion
+          # First flutter invocation can emit setup progress lines before the
+          # machine-readable JSON object. Keep only the JSON payload.
+          $versionOutput = & $flutter --version --machine 2>&1 | Out-String
+          $jsonStart = $versionOutput.IndexOf('{')
+          if ($jsonStart -lt 0) {
+            throw "Flutter --version --machine did not emit JSON. Output was:`n$versionOutput"
+          }
+          $versionJson = $versionOutput.Substring($jsonStart) | ConvertFrom-Json
+          $actualVersion = $versionJson.frameworkVersion
           if ($actualVersion -ne $env:FLUTTER_VERSION) {
             throw 'Flutter framework version did not match the pinned release.'
           }

@@ -4722,8 +4722,8 @@ pub fn complete_community_sale(
                 None,
             );
             CommunitySaleResult {
-                storage_status: "Sale saved locally • encrypted, audited, and ready for future sync"
-                    .to_owned(),
+                storage_status:
+                    "Sale saved locally • encrypted, audited, and ready for future sync".to_owned(),
                 completed: true,
                 invoice_number: Some(format!("INV-{:06}", sale.invoice_number())),
                 total_minor: sale.total().minor_units(),
@@ -5172,7 +5172,8 @@ fn record_diagnostic(
     duration_ms: Option<u64>,
     detail_code: Option<&str>,
 ) -> bool {
-    let Ok(sink) = ros_diagnostics::LocalDiagnosticsSink::open(application_support_directory) else {
+    let Ok(sink) = ros_diagnostics::LocalDiagnosticsSink::open(application_support_directory)
+    else {
         return false;
     };
     sink.record(ros_diagnostics::DiagnosticRecordInput {
