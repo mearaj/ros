@@ -23,7 +23,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     # OSV-Scanner action v2.3.8, pinned to the immutable reusable-workflow
     # revision referenced by its signed release.
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@3adb4b14a2b0623876d18d863a498b785fb3752d
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@a82132c0bd6c7261ffcb78e754c46c70ab57ad9a
     with:
       scan-args: |-
         --recursive
