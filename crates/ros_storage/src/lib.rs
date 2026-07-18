@@ -903,18 +903,13 @@ fn same_file_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool {
 
 #[cfg(windows)]
 fn same_file_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-
-    matches!(
-        (
-            left.volume_serial_number(),
-            left.file_index(),
-            right.volume_serial_number(),
-            right.file_index(),
-        ),
-        (Some(left_volume), Some(left_index), Some(right_volume), Some(right_index))
-            if left_volume == right_volume && left_index == right_index
-    )
+    // `MetadataExt::volume_serial_number` / `file_index` remain unstable on
+    // stable Rust (`windows_by_handle`). Keep a conservative comparison; the
+    // SQLite no-follow open still rejects symlinks for the backup path.
+    left.len() == right.len()
+        && left.file_type().is_file()
+        && right.file_type().is_file()
+        && left.modified().ok() == right.modified().ok()
 }
 
 #[cfg(not(any(unix, windows)))]

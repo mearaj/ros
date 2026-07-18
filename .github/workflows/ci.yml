@@ -224,7 +224,9 @@ jobs:
 
       - name: Analyze Flutter
         working-directory: apps/ros
-        run: flutter analyze
+        # Limit analysis to app sources. Vendored cargokit tooling under
+        # rust_builder/ is a separate package and is not part of the app graph.
+        run: flutter analyze lib test integration_test
 
       - name: Run Flutter tests
         working-directory: apps/ros
@@ -356,7 +358,9 @@ jobs:
 
       - name: Analyze Flutter
         working-directory: apps/ros
-        run: flutter analyze
+        # Limit analysis to app sources. Vendored cargokit tooling under
+        # rust_builder/ is a separate package and is not part of the app graph.
+        run: flutter analyze lib test integration_test
 
       - name: Run Flutter tests
         working-directory: apps/ros
