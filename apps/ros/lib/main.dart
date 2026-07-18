@@ -18,7 +18,8 @@ String diagnosticExceptionTypeFingerprint(Object error) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  var coreStatus = 'Restaurant Operating System • secure local core needs attention';
+  var coreStatus =
+      'Restaurant Operating System • secure local core needs attention';
   var applicationSupportDirectory = '';
   var workspace = const CommunityWorkspace(
     storageStatus:

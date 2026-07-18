@@ -275,6 +275,11 @@ jobs:
     name: Windows x64 Debug verification
     runs-on: windows-2022
     timeout-minutes: 60
+    env:
+      # jsonwebtoken's aws_lc_rs backend needs assembly on Windows. Use the
+      # crate-provided prebuilt NASM objects so CI does not require a local
+      # assembler install for x86_64-pc-windows-msvc debug builds.
+      AWS_LC_SYS_PREBUILT_NASM: "1"
 
     steps:
       - name: Check out source

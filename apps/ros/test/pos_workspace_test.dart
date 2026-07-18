@@ -933,7 +933,6 @@ void main() {
   );
 }
 
-
 Future<PosPricingPreview> _stubPreviewPricing({
   required List<PosCartLine> lines,
   int? discountFixedMinor,
