@@ -108,9 +108,7 @@ pub struct LocalDiagnosticsSink {
 
 impl LocalDiagnosticsSink {
     pub fn open(application_support_directory: impl AsRef<Path>) -> Result<Self, DiagnosticsError> {
-        let directory = application_support_directory
-            .as_ref()
-            .join("diagnostics");
+        let directory = application_support_directory.as_ref().join("diagnostics");
         fs::create_dir_all(&directory).map_err(|_| DiagnosticsError::Io)?;
         Ok(Self {
             directory,
@@ -159,7 +157,8 @@ impl LocalDiagnosticsSink {
 
     pub fn export_pack(&self) -> Result<DiagnosticsPack, DiagnosticsError> {
         let _guard = self.lock.lock().map_err(|_| DiagnosticsError::Io)?;
-        let mut events = read_events_file(&self.directory.join("events.jsonl.1")).unwrap_or_default();
+        let mut events =
+            read_events_file(&self.directory.join("events.jsonl.1")).unwrap_or_default();
         events.extend(read_events_file(&self.events_path())?);
         if events.len() > MAX_PACK_EVENTS {
             events = events.split_off(events.len() - MAX_PACK_EVENTS);
@@ -282,9 +281,7 @@ fn format_unix_millis(secs: u64, millis: u32) -> String {
     let hour = tod / 3_600;
     let minute = (tod % 3_600) / 60;
     let second = tod % 60;
-    format!(
-        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z"
-    )
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z")
 }
 
 fn civil_from_days(days: i64) -> (i32, u32, u32) {
@@ -339,18 +336,8 @@ fn is_allowed_event_code(code: &str) -> bool {
 }
 
 const FORBIDDEN_DETAIL_TOKENS: [&str; 12] = [
-    "pin",
-    "key",
-    "password",
-    "token",
-    "email",
-    "phone",
-    "customer",
-    "path",
-    "invoice",
-    "actor",
-    "device",
-    "hash",
+    "pin", "key", "password", "token", "email", "phone", "customer", "path", "invoice", "actor",
+    "device", "hash",
 ];
 
 fn is_allowed_detail_code(code: &str) -> bool {

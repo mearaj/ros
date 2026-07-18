@@ -49,8 +49,8 @@ jobs:
 
     steps:
       - name: Check out source
-        # actions/checkout v4.3.0
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        # actions/checkout v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -71,7 +71,7 @@ jobs:
 
       - name: Cache Rust dependencies
         # Swatinem/rust-cache v2
-        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           cache-targets: false
           cache-bin: false
@@ -107,8 +107,8 @@ jobs:
 
     steps:
       - name: Check out source
-        # actions/checkout v4.3.0
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        # actions/checkout v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -147,7 +147,7 @@ jobs:
       - name: Install Linux desktop build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang cmake curl jq libgtk-3-dev liblzma-dev ninja-build pkg-config xz-utils
+          sudo apt-get install --yes clang cmake curl jq libgtk-3-dev liblzma-dev ninja-build pkg-config xvfb xz-utils
 
       - name: Install pinned Rust toolchain
         # dtolnay/rust-toolchain stable branch, resolved to this immutable
@@ -159,7 +159,7 @@ jobs:
 
       - name: Cache Rust dependencies
         # Swatinem/rust-cache v2
-        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           # Keep compiler output and installed binaries out of CI cache. The
           # only cacheable material is fetched dependency source, while every
@@ -224,7 +224,9 @@ jobs:
 
       - name: Analyze Flutter
         working-directory: apps/ros
-        run: flutter analyze
+        # Limit analysis to app sources. Vendored cargokit tooling under
+        # rust_builder/ is a separate package and is not part of the app graph.
+        run: flutter analyze lib test integration_test
 
       - name: Run Flutter tests
         working-directory: apps/ros
@@ -232,7 +234,7 @@ jobs:
 
       - name: Run Flutter/Rust integration smoke test
         working-directory: apps/ros
-        run: flutter test integration_test
+        run: xvfb-run --auto-servernum flutter test integration_test
 
       - name: Build Linux desktop application
         working-directory: apps/ros
@@ -263,8 +265,8 @@ jobs:
 
       - name: Upload verification evidence
         if: always()
-        # actions/upload-artifact v4.6.2
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: verification-evidence-${{ github.sha }}
           path: ${{ runner.temp }}/verification-evidence
@@ -275,11 +277,16 @@ jobs:
     name: Windows x64 Debug verification
     runs-on: windows-2022
     timeout-minutes: 60
+    env:
+      # jsonwebtoken's aws_lc_rs backend needs assembly on Windows. Use the
+      # crate-provided prebuilt NASM objects so CI does not require a local
+      # assembler install for x86_64-pc-windows-msvc debug builds.
+      AWS_LC_SYS_PREBUILT_NASM: "1"
 
     steps:
       - name: Check out source
-        # actions/checkout v4.3.0
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        # actions/checkout v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -318,7 +325,15 @@ jobs:
           if (!(Test-Path -LiteralPath $flutter)) {
             throw 'The verified Flutter archive did not contain flutter.bat.'
           }
-          $actualVersion = (& $flutter --version --machine | ConvertFrom-Json).frameworkVersion
+          # First flutter invocation can emit setup progress lines before the
+          # machine-readable JSON object. Keep only the JSON payload.
+          $versionOutput = & $flutter --version --machine 2>&1 | Out-String
+          $jsonStart = $versionOutput.IndexOf('{')
+          if ($jsonStart -lt 0) {
+            throw "Flutter --version --machine did not emit JSON. Output was:`n$versionOutput"
+          }
+          $versionJson = $versionOutput.Substring($jsonStart) | ConvertFrom-Json
+          $actualVersion = $versionJson.frameworkVersion
           if ($actualVersion -ne $env:FLUTTER_VERSION) {
             throw 'Flutter framework version did not match the pinned release.'
           }
@@ -343,7 +358,9 @@ jobs:
 
       - name: Analyze Flutter
         working-directory: apps/ros
-        run: flutter analyze
+        # Limit analysis to app sources. Vendored cargokit tooling under
+        # rust_builder/ is a separate package and is not part of the app graph.
+        run: flutter analyze lib test integration_test
 
       - name: Run Flutter tests
         working-directory: apps/ros

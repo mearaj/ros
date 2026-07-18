@@ -23,13 +23,17 @@ void main() {
     },
   );
 
-  test('exception fingerprints are allow-listed detail codes without messages', () {
-    final fingerprint =
-        diagnosticExceptionTypeFingerprint(StateError('secret /tmp/path'));
-    expect(fingerprint, matches(RegExp(r'^type_[a-f0-9]{8}$')));
-    expect(fingerprint.contains('secret'), isFalse);
-    expect(fingerprint.contains('tmp'), isFalse);
-  });
+  test(
+    'exception fingerprints are allow-listed detail codes without messages',
+    () {
+      final fingerprint = diagnosticExceptionTypeFingerprint(
+        StateError('secret /tmp/path'),
+      );
+      expect(fingerprint, matches(RegExp(r'^type_[a-f0-9]{8}$')));
+      expect(fingerprint.contains('secret'), isFalse);
+      expect(fingerprint.contains('tmp'), isFalse);
+    },
+  );
 
   test('cloud share stays fail-closed when intake URL is unset', () async {
     expect(diagnosticsShareEndpointConfigured, isFalse);

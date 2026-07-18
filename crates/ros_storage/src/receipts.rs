@@ -33,9 +33,7 @@ pub fn encode_simple_pdf_receipt(receipt_text: &str) -> Vec<u8> {
             c => c.to_string(),
         })
         .collect::<String>();
-    let content = format!(
-        "BT /F1 9 Tf 36 800 Td 12 TL ({escaped}) Tj ET"
-    );
+    let content = format!("BT /F1 9 Tf 36 800 Td 12 TL ({escaped}) Tj ET");
     let content_len = content.len();
     let objects = [
         "1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n".to_owned(),

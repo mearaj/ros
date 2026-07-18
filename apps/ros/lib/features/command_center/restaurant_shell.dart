@@ -7447,7 +7447,12 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
     var selectedApproverId = approvers.first.staffId;
     final submission =
         await showDialog<
-          ({int amountMinor, String reason, String approverStaffId, String approverPin})
+          ({
+            int amountMinor,
+            String reason,
+            String approverStaffId,
+            String approverPin,
+          })
         >(
           context: context,
           builder: (dialogContext) => StatefulBuilder(
@@ -7490,9 +7495,7 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: selectedApproverId,
-                    decoration: const InputDecoration(
-                      labelText: 'Approver',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Approver'),
                     items: [
                       for (final staff in approvers)
                         DropdownMenuItem(
@@ -7859,7 +7862,9 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
       }
       var selectedApproverId = approvers.first.staffId;
       final submission =
-          await showDialog<({String reason, String approverStaffId, String approverPin})>(
+          await showDialog<
+            ({String reason, String approverStaffId, String approverPin})
+          >(
             context: context,
             builder: (dialogContext) => StatefulBuilder(
               builder: (dialogContext, setDialogState) => AlertDialog(

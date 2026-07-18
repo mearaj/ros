@@ -1241,131 +1241,137 @@ class _PosWorkspaceState extends State<PosWorkspace> {
     var mode = _DiscountMode.fixed;
     try {
       return await showDialog<_OrderDiscountChoice>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Order discount'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Optional owner/manager discount. Leave blank to continue without one. Rust revalidates authority and recalculates tax before recording.',
-              ),
-              const SizedBox(height: 12),
-              SegmentedButton<_DiscountMode>(
-                segments: const [
-                  ButtonSegment(
-                    value: _DiscountMode.fixed,
-                    label: Text('Fixed'),
-                  ),
-                  ButtonSegment(
-                    value: _DiscountMode.percentage,
-                    label: Text('Percent'),
-                  ),
-                ],
-                selected: {mode},
-                onSelectionChanged: (selected) {
-                  setDialogState(() => mode = selected.first);
-                },
-              ),
-              const SizedBox(height: 12),
-              if (mode == _DiscountMode.fixed)
-                TextField(
-                  controller: amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                  ],
-                  decoration: InputDecoration(
-                    labelText: 'Discount amount ($_currencyCode)',
-                  ),
-                )
-              else
-                TextField(
-                  controller: percentController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: 'Discount percent',
-                    helperText: 'Example: 10 for 10%',
-                  ),
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('Order discount'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Optional owner/manager discount. Leave blank to continue without one. Rust revalidates authority and recalculates tax before recording.',
                 ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: reasonController,
-                maxLength: 500,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Reason'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
+                const SizedBox(height: 12),
+                SegmentedButton<_DiscountMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: _DiscountMode.fixed,
+                      label: Text('Fixed'),
+                    ),
+                    ButtonSegment(
+                      value: _DiscountMode.percentage,
+                      label: Text('Percent'),
+                    ),
+                  ],
+                  selected: {mode},
+                  onSelectionChanged: (selected) {
+                    setDialogState(() => mode = selected.first);
+                  },
+                ),
+                const SizedBox(height: 12),
+                if (mode == _DiscountMode.fixed)
+                  TextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                    ],
+                    decoration: InputDecoration(
+                      labelText: 'Discount amount ($_currencyCode)',
+                    ),
+                  )
+                else
+                  TextField(
+                    controller: percentController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Discount percent',
+                      helperText: 'Example: 10 for 10%',
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: reasonController,
+                  maxLength: 500,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(labelText: 'Reason'),
+                ),
+              ],
             ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(
-                const _OrderDiscountChoice(),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
               ),
-              child: const Text('No discount'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final reason = reasonController.text.trim();
-                if (mode == _DiscountMode.fixed) {
-                  final amountText = amountController.text.trim();
-                  if (amountText.isEmpty) {
-                    Navigator.of(dialogContext).pop(const _OrderDiscountChoice());
+              TextButton(
+                onPressed: () => Navigator.of(
+                  dialogContext,
+                ).pop(const _OrderDiscountChoice()),
+                child: const Text('No discount'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final reason = reasonController.text.trim();
+                  if (mode == _DiscountMode.fixed) {
+                    final amountText = amountController.text.trim();
+                    if (amountText.isEmpty) {
+                      Navigator.of(
+                        dialogContext,
+                      ).pop(const _OrderDiscountChoice());
+                      return;
+                    }
+                    final amountMinor = parseDecimalPriceToMinorUnits(
+                      amountText,
+                    );
+                    if (amountMinor == null ||
+                        amountMinor <= 0 ||
+                        reason.length < 3) {
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(
+                      _OrderDiscountChoice(
+                        fixedMinor: amountMinor,
+                        reason: reason,
+                      ),
+                    );
                     return;
                   }
-                  final amountMinor = parseDecimalPriceToMinorUnits(amountText);
-                  if (amountMinor == null ||
-                      amountMinor <= 0 ||
+                  final percentText = percentController.text.trim();
+                  if (percentText.isEmpty) {
+                    Navigator.of(
+                      dialogContext,
+                    ).pop(const _OrderDiscountChoice());
+                    return;
+                  }
+                  final percent = double.tryParse(percentText);
+                  if (percent == null ||
+                      percent <= 0 ||
+                      percent > 100 ||
                       reason.length < 3) {
                     return;
                   }
+                  final basisPoints = (percent * 100).round();
                   Navigator.of(dialogContext).pop(
                     _OrderDiscountChoice(
-                      fixedMinor: amountMinor,
+                      percentageBasisPoints: basisPoints,
                       reason: reason,
                     ),
                   );
-                  return;
-                }
-                final percentText = percentController.text.trim();
-                if (percentText.isEmpty) {
-                  Navigator.of(dialogContext).pop(const _OrderDiscountChoice());
-                  return;
-                }
-                final percent = double.tryParse(percentText);
-                if (percent == null ||
-                    percent <= 0 ||
-                    percent > 100 ||
-                    reason.length < 3) {
-                  return;
-                }
-                final basisPoints = (percent * 100).round();
-                Navigator.of(dialogContext).pop(
-                  _OrderDiscountChoice(
-                    percentageBasisPoints: basisPoints,
-                    reason: reason,
-                  ),
-                );
-              },
-              child: const Text('Apply discount'),
-            ),
-          ],
+                },
+                child: const Text('Apply discount'),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
     } finally {
       amountController.dispose();
       percentController.dispose();

@@ -1,0 +1,3 @@
+# Migration checksums are calculated from the embedded source bytes. Keep
+# those reviewed bytes identical on Linux, macOS, and Windows checkouts.
+database/**/*.sql text eol=lf

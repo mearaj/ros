@@ -477,9 +477,7 @@ async fn submit_sync_batch(
     Ok(Json(acknowledgements))
 }
 
-pub(crate) fn unique_authorization(
-    headers: &HeaderMap,
-) -> Result<Option<&str>, DeviceAuthError> {
+pub(crate) fn unique_authorization(headers: &HeaderMap) -> Result<Option<&str>, DeviceAuthError> {
     let mut values = headers.get_all(AUTHORIZATION).iter();
     let Some(value) = values.next() else {
         return Ok(None);

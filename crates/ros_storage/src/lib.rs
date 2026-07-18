@@ -254,8 +254,7 @@ const DATABASE_KEYRING_SERVICE: &str = "com.gotigin.ros.sqlcipher.v1";
 // Pre-rename service IDs. Load migrates once into DATABASE_KEYRING_SERVICE so
 // existing desktop installs keep opening their encrypted database.
 #[cfg(feature = "development-bundled-sqlcipher")]
-const LEGACY_DATABASE_KEYRING_SERVICE: &str =
-    "com.gotigin.restaurantos.development.sqlcipher.v1";
+const LEGACY_DATABASE_KEYRING_SERVICE: &str = "com.gotigin.restaurantos.development.sqlcipher.v1";
 #[cfg(all(
     not(feature = "development-bundled-sqlcipher"),
     feature = "production-sqlcipher"
@@ -618,10 +617,7 @@ impl DatabaseKeyStore for PlatformDatabaseKeyStore {
     feature = "platform-keyring",
     any(target_os = "windows", target_os = "macos", target_os = "linux")
 ))]
-fn load_keyring_secret(
-    service: &str,
-    account: &str,
-) -> Result<Option<DatabaseKey>, KeyStoreError> {
+fn load_keyring_secret(service: &str, account: &str) -> Result<Option<DatabaseKey>, KeyStoreError> {
     let entry = keyring::Entry::new(service, account)
         .map_err(|_| KeyStoreError::SecureStorageUnavailable)?;
 
@@ -672,9 +668,7 @@ fn migrate_legacy_keyring_secret(
 
     // Best-effort cleanup of the pre-rename service ID. Failure here must not
     // block opening an already-verified current entry.
-    if let Ok(legacy_entry) =
-        keyring::Entry::new(LEGACY_DATABASE_KEYRING_SERVICE, slot.account)
-    {
+    if let Ok(legacy_entry) = keyring::Entry::new(LEGACY_DATABASE_KEYRING_SERVICE, slot.account) {
         let _ = legacy_entry.delete_credential();
     }
 
@@ -909,18 +903,13 @@ fn same_file_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool {
 
 #[cfg(windows)]
 fn same_file_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-
-    matches!(
-        (
-            left.volume_serial_number(),
-            left.file_index(),
-            right.volume_serial_number(),
-            right.file_index(),
-        ),
-        (Some(left_volume), Some(left_index), Some(right_volume), Some(right_index))
-            if left_volume == right_volume && left_index == right_index
-    )
+    // `MetadataExt::volume_serial_number` / `file_index` remain unstable on
+    // stable Rust (`windows_by_handle`). Keep a conservative comparison; the
+    // SQLite no-follow open still rejects symlinks for the backup path.
+    left.len() == right.len()
+        && left.file_type().is_file()
+        && right.file_type().is_file()
+        && left.modified().ok() == right.modified().ok()
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -5716,10 +5705,7 @@ impl LocalDatabase {
                     SELECT 1 FROM accounting_day_closes
                     WHERE branch_id = ?1 AND accounting_date_utc = ?2
                  )",
-                params![
-                    context.branch_id().to_string(),
-                    accounting_date_utc
-                ],
+                params![context.branch_id().to_string(), accounting_date_utc],
                 |row| row.get(0),
             )
             .map_err(StorageError::Sql)?;
@@ -6350,11 +6336,7 @@ impl LocalDatabase {
                             ],
                         )
                         .map_err(StorageError::Sql)?;
-                    sale_inventory_movements.push((
-                        movement_id,
-                        ingredient_product_id,
-                        -delta,
-                    ));
+                    sale_inventory_movements.push((movement_id, ingredient_product_id, -delta));
                 }
                 continue;
             }
@@ -7682,8 +7664,7 @@ impl LocalDatabase {
         context: &MutationContext,
     ) -> Result<(VerifiedLocalBackup, PortableRecoveryEnvelope), StorageError> {
         require_owner_authority(context)?;
-        let verified =
-            self.create_verified_local_backup(backup_destination.as_ref(), context)?;
+        let verified = self.create_verified_local_backup(backup_destination.as_ref(), context)?;
         let transaction = begin_immediate_transaction(&self.connection)?;
         revalidate_mutation_context(&transaction, context)?;
         let (device_id, _) = ensure_local_installation_identity(&transaction)?;
@@ -7733,8 +7714,11 @@ impl LocalDatabase {
             &created_at,
             &context.actor_id().to_string(),
         )?;
-        fs::write(envelope_destination.as_ref(), envelope.envelope_json.as_bytes())
-            .map_err(StorageError::Io)?;
+        fs::write(
+            envelope_destination.as_ref(),
+            envelope.envelope_json.as_bytes(),
+        )
+        .map_err(StorageError::Io)?;
         Ok((verified, envelope))
     }
 
@@ -7904,8 +7888,12 @@ impl LocalDatabase {
             "display_name": display_name.display(),
         })
         .to_string();
-        let audit_event_id =
-            append_hashed_audit_event(&transaction, context, "inventory.supplier.created", &payload)?;
+        let audit_event_id = append_hashed_audit_event(
+            &transaction,
+            context,
+            "inventory.supplier.created",
+            &payload,
+        )?;
         append_sync_outbox_event(
             &transaction,
             context,
@@ -15779,7 +15767,13 @@ mod tests {
         let refund_reason = MutationReason::new("Customer returned order").expect("reason");
         let (_approver_id, approval) = dual_approver(&database, &context, "654321");
         database
-            .refund_invoice(completed.invoice_id(), 5_000, &refund_reason, &context, &approval)
+            .refund_invoice(
+                completed.invoice_id(),
+                5_000,
+                &refund_reason,
+                &context,
+                &approval,
+            )
             .expect("split refund");
         let refunds: Vec<(String, i64)> = database
             .connection
@@ -16127,10 +16121,7 @@ mod tests {
         assert!(
             database
                 .connection
-                .execute(
-                    "UPDATE accounting_day_closes SET reason = 'tampered'",
-                    [],
-                )
+                .execute("UPDATE accounting_day_closes SET reason = 'tampered'", [],)
                 .is_err()
         );
         database
@@ -16959,7 +16950,9 @@ mod tests {
         transaction
             .execute_batch("PRAGMA user_version = 1;")
             .expect("stale user version");
-        transaction.commit().expect("inconsistent history committed");
+        transaction
+            .commit()
+            .expect("inconsistent history committed");
         drop(connection);
 
         assert!(matches!(
