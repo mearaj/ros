@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -537829204;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -990415903;
 
 // Section: executor
 
@@ -2167,6 +2167,43 @@ fn wire__crate__api__simple__replace_community_product_image_impl(
         },
     )
 }
+fn wire__crate__api__simple__reset_community_storage_for_fresh_setup_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "reset_community_storage_for_fresh_setup",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_application_support_directory = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::simple::reset_community_storage_for_fresh_setup(
+                            api_application_support_directory,
+                        ),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__simple__restore_community_local_backup_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -4232,73 +4269,79 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        54 => wire__crate__api__simple__restore_community_local_backup_impl(
+        54 => wire__crate__api__simple__reset_community_storage_for_fresh_setup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__api__simple__revise_community_customer_impl(
+        55 => wire__crate__api__simple__restore_community_local_backup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => {
+        56 => wire__crate__api__simple__revise_community_customer_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        57 => {
             wire__crate__api__simple__revoke_community_staff_impl(port, ptr, rust_vec_len, data_len)
         }
-        57 => wire__crate__api__simple__rotate_community_staff_pin_impl(
+        58 => wire__crate__api__simple__rotate_community_staff_pin_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__api__simple__save_community_draft_order_impl(
+        59 => wire__crate__api__simple__save_community_draft_order_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        59 => wire__crate__api__simple__send_community_draft_to_kitchen_impl(
+        60 => wire__crate__api__simple__send_community_draft_to_kitchen_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__simple__set_community_inventory_low_stock_threshold_impl(
+        61 => wire__crate__api__simple__set_community_inventory_low_stock_threshold_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__simple__set_community_product_availability_impl(
+        62 => wire__crate__api__simple__set_community_product_availability_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__api__simple__set_community_product_tax_treatment_impl(
+        63 => wire__crate__api__simple__set_community_product_tax_treatment_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => {
+        64 => {
             wire__crate__api__simple__unlock_community_staff_impl(port, ptr, rust_vec_len, data_len)
         }
-        64 => wire__crate__api__simple__update_community_product_price_impl(
+        65 => wire__crate__api__simple__update_community_product_price_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => wire__crate__api__simple__verify_community_local_backup_impl(
+        66 => wire__crate__api__simple__verify_community_local_backup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        66 => {
+        67 => {
             wire__crate__api__simple__void_community_invoice_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),

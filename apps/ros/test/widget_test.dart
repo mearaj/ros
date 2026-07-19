@@ -319,8 +319,48 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Local storage needs attention'), findsOneWidget);
+    expect(find.text('Retry storage'), findsOneWidget);
     expect(find.text('Create local workspace'), findsNothing);
   });
+
+  testWidgets(
+    'offers fresh setup when local data recovery is required before setup',
+    (tester) async {
+      await tester.pumpWidget(
+        const RestaurantOperatingSystemApp(
+          coreStatus: 'Restaurant Operating System • Rust operational core',
+          workspace: CommunityWorkspace(
+            storageStatus:
+                'Local storage needs attention • local data recovery is required before setup',
+            setupRequired: true,
+            categories: [],
+            products: [],
+            customers: [],
+            openDrafts: [],
+            kitchenTickets: [],
+          ),
+          applicationSupportDirectory: '/test-support',
+        ),
+      );
+
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Local storage needs attention'), findsOneWidget);
+      expect(find.text('Start fresh setup'), findsOneWidget);
+      expect(find.text('Retry storage'), findsOneWidget);
+      expect(find.text('Create local workspace'), findsNothing);
+
+      await tester.tap(find.text('POS'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Secure local storage must be resolved before opening this workspace.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('requires an owner PIN before a provisioned counter is exposed', (
     tester,

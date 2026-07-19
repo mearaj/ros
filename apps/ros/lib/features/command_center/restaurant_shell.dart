@@ -156,15 +156,12 @@ class _RestaurantShellState extends State<RestaurantShell> {
   void _setDestination(_Destination destination) {
     if (!_canAccessDestination(destination)) {
       final messenger = ScaffoldMessenger.maybeOf(context);
+      final message = _storageNeedsAttention
+          ? 'Secure local storage must be resolved before opening this workspace.'
+          : 'This workspace is not available to the active role.';
       messenger
         ?..clearSnackBars()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text(
-              'This workspace is not available to the active role.',
-            ),
-          ),
-        );
+        ..showSnackBar(SnackBar(content: Text(message)));
       return;
     }
     final breadcrumb = switch (destination) {
@@ -183,7 +180,14 @@ class _RestaurantShellState extends State<RestaurantShell> {
     });
   }
 
+  bool get _storageNeedsAttention =>
+      _workspace.storageStatus.startsWith('Local storage needs attention');
+
   bool _canAccessDestination(_Destination destination) {
+    if (_storageNeedsAttention) {
+      return destination == _Destination.overview ||
+          destination == _Destination.inventory;
+    }
     if (_workspace.setupRequired) {
       return destination == _Destination.overview ||
           destination == _Destination.inventory;
@@ -357,6 +361,20 @@ class _RestaurantShellState extends State<RestaurantShell> {
         role == 'owner' ||
         role == 'manager' ||
         role == 'kitchen';
+    if (_storageNeedsAttention &&
+        (_destination == _Destination.overview ||
+            _destination == _Destination.inventory)) {
+      return _StorageAttentionWorkspace(
+        key: ValueKey('storage-attention-$_destination'),
+        status: _workspace.storageStatus,
+        isSaving: _isSaving,
+        canStartFresh: _workspace.storageStatus.contains(
+          'local data recovery is required',
+        ),
+        onRetry: _retryLocalStorage,
+        onStartFresh: _resetStorageForFreshSetup,
+      );
+    }
     return switch (_destination) {
       _Destination.overview => _Overview(
         key: const ValueKey('overview'),
@@ -419,6 +437,102 @@ class _RestaurantShellState extends State<RestaurantShell> {
         activeStaffRole: role,
       ),
     };
+  }
+
+  Future<void> _retryLocalStorage() async {
+    if (_isSaving || widget.applicationSupportDirectory.isEmpty) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final workspace = await loadCommunityWorkspace(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+      );
+      final security = await loadCommunityStaffSecurity(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+      );
+      if (!mounted) return;
+      setState(() {
+        _workspace = workspace;
+        _staffSecurity = security;
+        if (!workspace.storageStatus.startsWith(
+          'Local storage needs attention',
+        )) {
+          _destination = workspace.setupRequired
+              ? _Destination.inventory
+              : _Destination.overview;
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _resetStorageForFreshSetup() async {
+    if (_isSaving || widget.applicationSupportDirectory.isEmpty) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Start a fresh local workspace?'),
+        content: const Text(
+          'A secure device key is present, but the encrypted restaurant database file is missing. '
+          'Starting fresh clears that orphaned key and creates an empty local workspace so you can set up again.\n\n'
+          'Do this only if you do not have a portable recovery backup for this installation.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Start fresh'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final workspace = await resetCommunityStorageForFreshSetup(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+      );
+      final security = await loadCommunityStaffSecurity(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+      );
+      if (!mounted) return;
+      setState(() {
+        _workspace = workspace;
+        _staffSecurity = security;
+        _destination = workspace.setupRequired
+            ? _Destination.inventory
+            : _Destination.overview;
+      });
+      if (!workspace.storageStatus.startsWith(
+        'Local storage needs attention',
+      )) {
+        ScaffoldMessenger.maybeOf(context)
+          ?..clearSnackBars()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Local storage is ready. Continue with restaurant setup.',
+              ),
+            ),
+          );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   Future<void> _completeCommunitySetup({
@@ -2491,18 +2605,9 @@ class _CatalogWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final storageUnavailable = workspace.storageStatus.startsWith(
-      'Local storage needs attention',
-    );
-
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 180),
-      child: storageUnavailable
-          ? _StorageAttentionWorkspace(
-              key: const ValueKey('storage-attention'),
-              status: workspace.storageStatus,
-            )
-          : workspace.setupRequired
+      child: workspace.setupRequired
           ? _CommunitySetupForm(
               key: const ValueKey('community-setup'),
               status: workspace.storageStatus,
@@ -2540,19 +2645,37 @@ class _CatalogWorkspace extends StatelessWidget {
 }
 
 class _StorageAttentionWorkspace extends StatelessWidget {
-  const _StorageAttentionWorkspace({required this.status, super.key});
+  const _StorageAttentionWorkspace({
+    required this.status,
+    required this.isSaving,
+    required this.canStartFresh,
+    required this.onRetry,
+    required this.onStartFresh,
+    super.key,
+  });
 
   final String status;
+  final bool isSaving;
+  final bool canStartFresh;
+  final VoidCallback onRetry;
+  final VoidCallback onStartFresh;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final guidance = canStartFresh
+        ? 'A secure device key is present, but the encrypted restaurant database file is missing. '
+              'You can retry if the file was restored, or start a fresh local workspace to continue setup.'
+        : 'Secure local storage could not be opened. No restaurant data has been created or changed. '
+              'Retry after fixing device storage, or ask an owner to restore a portable backup.';
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Card(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(28),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2560,26 +2683,50 @@ class _StorageAttentionWorkspace extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.shield_outlined,
-                    color: Theme.of(context).colorScheme.error,
+                    color: theme.colorScheme.error,
                     size: 32,
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'Local storage needs attention',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: 10),
                   Text(
                     status,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'No restaurant data has been created or changed. Resolve secure local storage before continuing.',
+                  Text(guidance, style: theme.textTheme.bodyMedium),
+                  const SizedBox(height: 24),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: isSaving ? null : onRetry,
+                        icon: isSaving
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.refresh),
+                        label: Text(isSaving ? 'Checking…' : 'Retry storage'),
+                      ),
+                      if (canStartFresh)
+                        OutlinedButton.icon(
+                          onPressed: isSaving ? null : onStartFresh,
+                          icon: const Icon(Icons.restart_alt),
+                          label: const Text('Start fresh setup'),
+                        ),
+                    ],
                   ),
                 ],
               ),

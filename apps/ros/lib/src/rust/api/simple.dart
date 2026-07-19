@@ -104,6 +104,14 @@ Future<CommunityStaffSecurity> revokeCommunityStaff({
   reason: reason,
 );
 
+/// Explicit installer recovery when a secure device key exists without its
+/// encrypted database. Never runs automatically during ordinary bootstrap.
+Future<CommunityWorkspace> resetCommunityStorageForFreshSetup({
+  required String applicationSupportDirectory,
+}) => RustLib.instance.api.crateApiSimpleResetCommunityStorageForFreshSetup(
+  applicationSupportDirectory: applicationSupportDirectory,
+);
+
 Future<CommunityWorkspace> loadCommunityWorkspace({
   required String applicationSupportDirectory,
 }) => RustLib.instance.api.crateApiSimpleLoadCommunityWorkspace(

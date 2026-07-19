@@ -902,6 +902,55 @@ pub fn revoke_community_staff(
     load_community_staff_security(application_support_directory)
 }
 
+/// Explicit installer recovery when a secure device key exists without its
+/// encrypted database. Never runs automatically during ordinary bootstrap.
+pub fn reset_community_storage_for_fresh_setup(
+    application_support_directory: String,
+) -> CommunityWorkspace {
+    let started = std::time::Instant::now();
+    let support_directory = PathBuf::from(&application_support_directory);
+    let database_path = support_directory.join(COMMUNITY_DATABASE_FILE_NAME);
+
+    if std::fs::create_dir_all(&support_directory).is_err() {
+        record_diagnostic(
+            &application_support_directory,
+            "storage_fresh_reset",
+            ros_diagnostics::DiagnosticComponent::Bridge,
+            ros_diagnostics::DiagnosticOutcome::Failed,
+            Some(started.elapsed().as_millis() as u64),
+            Some("support_directory_unavailable"),
+        );
+        return unavailable_workspace(
+            "Local storage needs attention • application data directory is unavailable".to_owned(),
+        );
+    }
+
+    match ros_storage::reset_orphaned_key_and_create_platform_database(&database_path) {
+        Ok(_) => {
+            record_diagnostic(
+                &application_support_directory,
+                "storage_fresh_reset",
+                ros_diagnostics::DiagnosticComponent::Bridge,
+                ros_diagnostics::DiagnosticOutcome::Ok,
+                Some(started.elapsed().as_millis() as u64),
+                None,
+            );
+            load_community_workspace(application_support_directory)
+        }
+        Err(error) => {
+            record_diagnostic(
+                &application_support_directory,
+                "storage_fresh_reset",
+                ros_diagnostics::DiagnosticComponent::Bridge,
+                ros_diagnostics::DiagnosticOutcome::Failed,
+                Some(started.elapsed().as_millis() as u64),
+                Some("reset_rejected"),
+            );
+            unavailable_workspace(user_safe_bootstrap_status(error))
+        }
+    }
+}
+
 pub fn load_community_workspace(application_support_directory: String) -> CommunityWorkspace {
     let database = match open_community_database(&application_support_directory) {
         Ok(database) => database,

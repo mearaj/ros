@@ -515,6 +515,7 @@ impl DatabaseKeySlot {
 trait DatabaseKeyStore {
     fn load(&self, slot: DatabaseKeySlot) -> Result<Option<DatabaseKey>, KeyStoreError>;
     fn store_new(&self, slot: DatabaseKeySlot, key: &DatabaseKey) -> Result<(), KeyStoreError>;
+    fn clear(&self, slot: DatabaseKeySlot) -> Result<(), KeyStoreError>;
 }
 
 #[derive(Debug)]
@@ -611,6 +612,14 @@ impl DatabaseKeyStore for PlatformDatabaseKeyStore {
         let _guard = key_store_lock();
         store_keyring_secret(slot.service, slot.account, key)
     }
+
+    fn clear(&self, slot: DatabaseKeySlot) -> Result<(), KeyStoreError> {
+        let _guard = key_store_lock();
+        delete_keyring_secret(slot.service, slot.account)?;
+        // Best-effort: a pre-rename legacy entry must not block fresh setup.
+        let _ = delete_keyring_secret(LEGACY_DATABASE_KEYRING_SERVICE, slot.account);
+        Ok(())
+    }
 }
 
 #[cfg(all(
@@ -642,6 +651,19 @@ fn store_keyring_secret(
     entry
         .set_secret(key.as_bytes())
         .map_err(|_| KeyStoreError::SecureStorageUnavailable)
+}
+
+#[cfg(all(
+    feature = "platform-keyring",
+    any(target_os = "windows", target_os = "macos", target_os = "linux")
+))]
+fn delete_keyring_secret(service: &str, account: &str) -> Result<(), KeyStoreError> {
+    let entry = keyring::Entry::new(service, account)
+        .map_err(|_| KeyStoreError::SecureStorageUnavailable)?;
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(_) => Err(KeyStoreError::SecureStorageUnavailable),
+    }
 }
 
 #[cfg(all(
@@ -2090,28 +2112,89 @@ fn open_or_create_with_key_store(
         }
         (true, None) => Err(DatabaseBootstrapError::DatabaseKeyMissing),
         (false, Some(_)) => Err(DatabaseBootstrapError::ExistingKeyWithoutDatabase),
-        (false, None) => {
-            let generated_key =
-                DatabaseKey::generate().map_err(DatabaseBootstrapError::KeyStore)?;
-            key_store
-                .store_new(slot, &generated_key)
-                .map_err(DatabaseBootstrapError::KeyStore)?;
-            let verified_key = key_store
-                .load(slot)
-                .map_err(DatabaseBootstrapError::KeyStore)?
-                .ok_or(DatabaseBootstrapError::KeyStore(
-                    KeyStoreError::WriteVerificationFailed,
-                ))?;
-
-            if !generated_key.same_as(&verified_key) {
-                return Err(DatabaseBootstrapError::KeyStore(
-                    KeyStoreError::WriteVerificationFailed,
-                ));
-            }
-
-            LocalDatabase::open(path, &generated_key).map_err(DatabaseBootstrapError::Storage)
-        }
+        (false, None) => create_fresh_database_with_key_store(path, key_store, slot),
     }
+}
+
+/// Owner/installer recovery for the orphaned-key case: a secure device key
+/// exists but the encrypted database file does not. Clearing the orphaned key
+/// and creating a fresh empty database is an explicit, confirmed action — never
+/// an automatic bootstrap side effect.
+#[cfg(all(
+    feature = "platform-keyring",
+    any(target_os = "windows", target_os = "macos", target_os = "linux")
+))]
+pub fn reset_orphaned_key_and_create_platform_database(
+    path: impl AsRef<Path>,
+) -> Result<LocalDatabase, DatabaseBootstrapError> {
+    reset_orphaned_key_and_create_with_key_store(
+        path.as_ref(),
+        &PlatformDatabaseKeyStore,
+        DatabaseKeySlot::community_default(),
+    )
+}
+
+#[cfg(all(
+    feature = "platform-keyring",
+    not(any(target_os = "windows", target_os = "macos", target_os = "linux"))
+))]
+pub fn reset_orphaned_key_and_create_platform_database(
+    _path: impl AsRef<Path>,
+) -> Result<LocalDatabase, DatabaseBootstrapError> {
+    Err(DatabaseBootstrapError::UnsupportedSecureStoragePlatform)
+}
+
+#[cfg(feature = "platform-keyring")]
+fn reset_orphaned_key_and_create_with_key_store(
+    path: &Path,
+    key_store: &impl DatabaseKeyStore,
+    slot: DatabaseKeySlot,
+) -> Result<LocalDatabase, DatabaseBootstrapError> {
+    let _bootstrap_lock = acquire_bootstrap_lock(path)?;
+    if path.exists() {
+        return Err(DatabaseBootstrapError::Storage(
+            StorageError::InvalidPersistedData(
+                "refusing to clear a device key while an encrypted database file is present"
+                    .to_owned(),
+            ),
+        ));
+    }
+    let stored_key = key_store
+        .load(slot)
+        .map_err(DatabaseBootstrapError::KeyStore)?;
+    if stored_key.is_none() {
+        return create_fresh_database_with_key_store(path, key_store, slot);
+    }
+    key_store
+        .clear(slot)
+        .map_err(DatabaseBootstrapError::KeyStore)?;
+    create_fresh_database_with_key_store(path, key_store, slot)
+}
+
+#[cfg(feature = "platform-keyring")]
+fn create_fresh_database_with_key_store(
+    path: &Path,
+    key_store: &impl DatabaseKeyStore,
+    slot: DatabaseKeySlot,
+) -> Result<LocalDatabase, DatabaseBootstrapError> {
+    let generated_key = DatabaseKey::generate().map_err(DatabaseBootstrapError::KeyStore)?;
+    key_store
+        .store_new(slot, &generated_key)
+        .map_err(DatabaseBootstrapError::KeyStore)?;
+    let verified_key = key_store
+        .load(slot)
+        .map_err(DatabaseBootstrapError::KeyStore)?
+        .ok_or(DatabaseBootstrapError::KeyStore(
+            KeyStoreError::WriteVerificationFailed,
+        ))?;
+
+    if !generated_key.same_as(&verified_key) {
+        return Err(DatabaseBootstrapError::KeyStore(
+            KeyStoreError::WriteVerificationFailed,
+        ));
+    }
+
+    LocalDatabase::open(path, &generated_key).map_err(DatabaseBootstrapError::Storage)
 }
 
 fn acquire_bootstrap_lock(path: &Path) -> Result<File, DatabaseBootstrapError> {
@@ -12332,6 +12415,11 @@ mod tests {
             *self.stored_key.lock().expect("test key-store lock") = Some(*key.as_bytes());
             Ok(())
         }
+
+        fn clear(&self, _slot: DatabaseKeySlot) -> Result<(), KeyStoreError> {
+            *self.stored_key.lock().expect("test key-store lock") = None;
+            Ok(())
+        }
     }
 
     fn fresh_provisioned_database() -> (tempfile::TempDir, LocalDatabase, Branch) {
@@ -17035,6 +17123,15 @@ mod tests {
             open_or_create_with_key_store(&key_without_database_path, &key_only_store, slot),
             Err(DatabaseBootstrapError::ExistingKeyWithoutDatabase)
         ));
+
+        reset_orphaned_key_and_create_with_key_store(
+            &key_without_database_path,
+            &key_only_store,
+            slot,
+        )
+        .expect("orphaned key can be cleared for an explicit fresh setup");
+        open_or_create_with_key_store(&key_without_database_path, &key_only_store, slot)
+            .expect("fresh setup reopens after orphaned-key reset");
     }
 
     #[test]
