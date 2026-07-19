@@ -33,6 +33,8 @@ pub struct CommunityCategoryView {
     pub category_id: String,
     pub display_name: String,
     pub revision: i64,
+    pub image_asset_key: Option<String>,
+    pub image_bytes: Option<Vec<u8>>,
 }
 
 /// Untrusted catalogue selection supplied by Flutter. Rust verifies the
@@ -754,15 +756,25 @@ pub fn create_community_staff(
             )
         }
     };
-    if database
-        .create_local_staff(&display_name, role, &pin, &context)
-        .is_err()
-    {
-        return unavailable_staff_security(
-            "Staff needs attention • the account could not be created".to_owned(),
-        );
+    match database.create_local_staff(&display_name, role, &pin, &context) {
+        Ok(_) => load_community_staff_security(application_support_directory),
+        Err(ros_storage::StorageError::CatalogConflict) => unavailable_staff_security(
+            "A staff member with that name already exists. Choose a different name.".to_owned(),
+        ),
+        Err(ros_storage::StorageError::PermissionDenied)
+        | Err(ros_storage::StorageError::StaffSessionRequired) => unavailable_staff_security(
+            "Unlock as the Owner before adding staff.".to_owned(),
+        ),
+        Err(ros_storage::StorageError::InvalidStaffPin) => unavailable_staff_security(
+            "Use a six to twelve digit PIN for this staff member.".to_owned(),
+        ),
+        Err(ros_storage::StorageError::InvalidPersistedData(_)) => unavailable_staff_security(
+            "Enter a staff name using up to 120 characters.".to_owned(),
+        ),
+        Err(_) => unavailable_staff_security(
+            "Could not add this staff member right now. Try again; if it continues, check this device's available storage.".to_owned(),
+        ),
     }
-    load_community_staff_security(application_support_directory)
 }
 
 /// Owner-only, append-only change of a non-owner staff member's effective
@@ -1039,6 +1051,18 @@ pub fn load_community_workspace(application_support_directory: String) -> Commun
                         );
                             }
                         };
+                    let category_images = match database.list_category_images(branch.branch_id()) {
+                        Ok(images) => images
+                            .into_iter()
+                            .map(|image| (image.category_id().to_string(), image))
+                            .collect::<std::collections::HashMap<_, _>>(),
+                        Err(_) => {
+                            return unavailable_workspace(
+                                "Local storage needs attention • category images could not be loaded"
+                                    .to_owned(),
+                            );
+                        }
+                    };
                     let product_modifier_options = match database
                     .list_catalog_product_modifier_options(branch.branch_id())
                 {
@@ -1068,6 +1092,7 @@ pub fn load_community_workspace(application_support_directory: String) -> Commun
                     }
                 };
                     let mut product_images = product_images;
+                    let mut category_images = category_images;
                     let mut product_modifier_options = product_modifier_options;
                     let open_drafts = match database.list_open_draft_orders(branch.branch_id()) {
                         Ok(drafts) => drafts
@@ -1166,10 +1191,20 @@ pub fn load_community_workspace(application_support_directory: String) -> Commun
                         categories: if can_operate_counter {
                             categories
                                 .into_iter()
-                                .map(|category| CommunityCategoryView {
-                                    category_id: category.category_id().to_string(),
-                                    display_name: category.display_name().display().to_owned(),
-                                    revision: category.revision(),
+                                .map(|category| {
+                                    let category_id = category.category_id().to_string();
+                                    let image = category_images.remove(&category_id);
+                                    CommunityCategoryView {
+                                        image_asset_key: image.as_ref().and_then(|image| {
+                                            image.asset_key().map(ToOwned::to_owned)
+                                        }),
+                                        image_bytes: image.as_ref().and_then(|image| {
+                                            image.image_bytes().map(ToOwned::to_owned)
+                                        }),
+                                        category_id,
+                                        display_name: category.display_name().display().to_owned(),
+                                        revision: category.revision(),
+                                    }
                                 })
                                 .collect()
                         } else {
@@ -3078,11 +3113,235 @@ pub fn create_community_category(
             &application_support_directory,
             "Category saved locally".to_owned(),
         ),
+        Err(ros_storage::StorageError::CatalogConflict) => workspace_with_error(
+            &application_support_directory,
+            "A category with that name already exists. Choose a different name.".to_owned(),
+        ),
+        Err(ros_storage::StorageError::PermissionDenied)
+        | Err(ros_storage::StorageError::StaffSessionRequired) => workspace_with_error(
+            &application_support_directory,
+            "Unlock as an owner or manager before changing categories.".to_owned(),
+        ),
+        Err(ros_storage::StorageError::CommunityNotProvisioned) => workspace_with_error(
+            &application_support_directory,
+            "Finish restaurant setup before adding categories.".to_owned(),
+        ),
         Err(_) => workspace_with_error(
             &application_support_directory,
-            "Category needs attention • local changes could not be saved".to_owned(),
+            "Could not save this category right now. Try again; if it continues, check that this device has available storage.".to_owned(),
         ),
     }
+}
+
+/// Imports an editable Indian restaurant starter menu. Every item is imported
+/// disabled at a zero price so the owner must review local pricing and
+/// availability before it can appear at the counter.
+pub fn import_common_starter_menu(application_support_directory: String) -> CommunityWorkspace {
+    const STARTER_MENU: &[(&str, &[&str])] = &[
+        (
+            "Beverages",
+            &[
+                "Masala chai",
+                "Filter coffee",
+                "Fresh lime soda",
+                "Mango lassi",
+            ],
+        ),
+        (
+            "Breakfast",
+            &["Idli sambar", "Masala dosa", "Plain dosa", "Vegetable upma"],
+        ),
+        (
+            "Snacks & Starters",
+            &[
+                "Vegetable samosa",
+                "Paneer tikka",
+                "French fries",
+                "Veg spring rolls",
+            ],
+        ),
+        (
+            "Main Course",
+            &[
+                "Paneer butter masala",
+                "Dal tadka",
+                "Veg kadai",
+                "Chicken curry",
+            ],
+        ),
+        ("Breads", &["Tandoori roti", "Butter naan", "Garlic naan"]),
+        (
+            "Rice & Biryani",
+            &[
+                "Veg biryani",
+                "Chicken biryani",
+                "Jeera rice",
+                "Veg fried rice",
+            ],
+        ),
+        (
+            "Desserts",
+            &["Gulab jamun", "Ice cream", "Brownie with ice cream"],
+        ),
+    ];
+
+    let database = match open_community_database(&application_support_directory) {
+        Ok(database) => database,
+        Err(status) => return unavailable_workspace(status),
+    };
+    let context = match database.community_active_staff_context() {
+        Ok(context) => context,
+        Err(_) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Unlock as an owner or manager before importing a starter menu.".to_owned(),
+            );
+        }
+    };
+    let branch = match database.community_branch() {
+        Ok(branch) => branch,
+        Err(_) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Finish restaurant setup before importing a starter menu.".to_owned(),
+            );
+        }
+    };
+    let existing_categories = match database.list_active_categories(branch.branch_id()) {
+        Ok(categories) => categories,
+        Err(_) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Could not check your current menu. Try importing again.".to_owned(),
+            );
+        }
+    };
+    let existing_products = match database.list_catalog_products(branch.branch_id()) {
+        Ok(products) => products,
+        Err(_) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Could not check your current menu items. Try importing again.".to_owned(),
+            );
+        }
+    };
+    let mut category_ids = existing_categories
+        .into_iter()
+        .map(|category| {
+            (
+                category.display_name().display().to_lowercase(),
+                category.category_id().clone(),
+            )
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut product_names = existing_products
+        .into_iter()
+        .map(|product| {
+            (
+                (
+                    product.category_id().map(ToString::to_string),
+                    product.display_name().display().to_lowercase(),
+                ),
+                (),
+            )
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    let review_reason =
+        match ros_core::MutationReason::new("Starter menu imported; owner price review required") {
+            Ok(reason) => reason,
+            Err(_) => unreachable!("literal starter-menu reason is valid"),
+        };
+
+    let mut added_category_count = 0;
+    let mut added_item_count = 0;
+    for (category_position, (category_name, items)) in STARTER_MENU.iter().enumerate() {
+        let category_key = category_name.to_lowercase();
+        let category_id = if let Some(category_id) = category_ids.get(&category_key) {
+            category_id.clone()
+        } else {
+            let category = match ros_core::CreateCategory::new(
+                category_name,
+                category_position as i64,
+            ) {
+                Ok(command) => match database.create_category(&command, &context) {
+                    Ok(category) => category,
+                    Err(_) => {
+                        return workspace_with_error(
+                            &application_support_directory,
+                            "Starter menu import paused. It is safe to try again; ROS will only add missing starter entries.".to_owned(),
+                        );
+                    }
+                },
+                Err(_) => unreachable!("literal starter category is valid"),
+            };
+            let category_id = category.category_id().clone();
+            category_ids.insert(category_key, category_id.clone());
+            added_category_count += 1;
+            category_id
+        };
+        for (item_position, item_name) in items.iter().enumerate() {
+            let item_key = (Some(category_id.to_string()), item_name.to_lowercase());
+            if product_names.contains_key(&item_key) {
+                continue;
+            }
+            let price = match ros_core::Money::new(0, branch.currency()) {
+                Ok(price) => price,
+                Err(_) => {
+                    return workspace_with_error(
+                        &application_support_directory,
+                        "Starter menu import could not use this branch's currency.".to_owned(),
+                    );
+                }
+            };
+            let command = match ros_core::CreateProduct::new(
+                item_name,
+                Some(category_id.clone()),
+                price,
+                None,
+                None,
+                item_position as i64,
+            ) {
+                Ok(command) => command,
+                Err(_) => unreachable!("literal starter menu item is valid"),
+            };
+            let product = match database.create_product(&command, &context) {
+                Ok(product) => product,
+                Err(_) => {
+                    return workspace_with_error(
+                        &application_support_directory,
+                        "Starter menu import paused. It is safe to try again; ROS will only add missing starter entries.".to_owned(),
+                    );
+                }
+            };
+            if database
+                .set_product_availability(
+                    product.product_id(),
+                    product.revision(),
+                    false,
+                    &review_reason,
+                    &context,
+                )
+                .is_err()
+            {
+                return workspace_with_error(
+                        &application_support_directory,
+                    "Starter menu import paused. It is safe to try again; ROS will only add missing starter entries.".to_owned(),
+                );
+            }
+            product_names.insert(item_key, ());
+            added_item_count += 1;
+        }
+    }
+    let status = if added_category_count == 0 && added_item_count == 0 {
+        "Starter menu is already present • no duplicate categories or items were added.".to_owned()
+    } else {
+        format!(
+            "Starter menu updated • added {added_category_count} categor{} and {added_item_count} item{}. Review each price, then resume the items you want to sell.",
+            if added_category_count == 1 { "y" } else { "ies" },
+            if added_item_count == 1 { "" } else { "s" },
+        )
+    };
+    workspace_with_status(&application_support_directory, status)
 }
 
 /// Enrolls a customer as an active local profile. The active staff session
@@ -3884,8 +4143,8 @@ pub fn archive_community_product(
     }
 }
 
-/// Archives a category after its active products have been removed. History is
-/// retained for audit and future sync.
+/// Removes an empty category, or a category whose items have never been sold,
+/// from the active catalogue. Retained transactions prevent removal.
 pub fn archive_community_category(
     application_support_directory: String,
     category_id: String,
@@ -3926,11 +4185,126 @@ pub fn archive_community_category(
     match database.archive_category(&category_id, expected_revision, &reason, &context) {
         Ok(_) => workspace_with_status(
             &application_support_directory,
-            "Category archived locally • history retained".to_owned(),
+            "Category removed from the active menu • history retained".to_owned(),
         ),
         Err(_) => workspace_with_error(
             &application_support_directory,
-            "Category needs attention • remove active products first or retry later".to_owned(),
+            "Category needs attention • categories with sold items must be retained".to_owned(),
+        ),
+    }
+}
+
+/// Replaces a category image with category-specific app artwork, a verified
+/// Gotigin catalogue image, or a restaurant-owned upload.
+pub fn replace_community_category_image(
+    application_support_directory: String,
+    category_id: String,
+    restaurant_image_bytes: Option<Vec<u8>>,
+    built_in_image_key: Option<String>,
+    gotigin_catalog_image: Option<GotiginCatalogMenuImageSelection>,
+) -> CommunityWorkspace {
+    let database = match open_community_database(&application_support_directory) {
+        Ok(database) => database,
+        Err(status) => return unavailable_workspace(status),
+    };
+    let context = match database.community_active_staff_context() {
+        Ok(context) => context,
+        Err(_) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Category image needs attention • unlock as owner or manager first".to_owned(),
+            );
+        }
+    };
+    let category_id = match ros_core::EntityId::parse(&category_id) {
+        Ok(category_id) => category_id,
+        Err(_) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Category image needs attention • choose an active category".to_owned(),
+            );
+        }
+    };
+    let image = match selected_menu_item_image(
+        built_in_image_key,
+        restaurant_image_bytes,
+        gotigin_catalog_image,
+    ) {
+        Ok(Some(image)) => image,
+        Ok(None) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Category image needs attention • choose an image".to_owned(),
+            );
+        }
+        Err(message) => {
+            return workspace_with_error(
+                &application_support_directory,
+                format!("Category image needs attention • {message}"),
+            );
+        }
+    };
+    match database.replace_category_image(&category_id, &image, &context) {
+        Ok(_) => workspace_with_status(
+            &application_support_directory,
+            "Category image updated locally".to_owned(),
+        ),
+        Err(ros_storage::StorageError::CatalogConflict) => workspace_with_error(
+            &application_support_directory,
+            "Category image needs attention • the category changed before this image was saved. Open it again and try once more.".to_owned(),
+        ),
+        Err(ros_storage::StorageError::CategoryArchived) => workspace_with_error(
+            &application_support_directory,
+            "Category image needs attention • this category is no longer active.".to_owned(),
+        ),
+        Err(_) => workspace_with_error(
+            &application_support_directory,
+            "Category image needs attention • it could not be updated. Please try again.".to_owned(),
+        ),
+    }
+}
+
+/// Removes the current category visual without deleting the category or its
+/// retained image/licence history.
+pub fn clear_community_category_image(
+    application_support_directory: String,
+    category_id: String,
+) -> CommunityWorkspace {
+    let database = match open_community_database(&application_support_directory) {
+        Ok(database) => database,
+        Err(status) => return unavailable_workspace(status),
+    };
+    let context = match database.community_active_staff_context() {
+        Ok(context) => context,
+        Err(_) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Category image needs attention • unlock as owner or manager first".to_owned(),
+            );
+        }
+    };
+    let category_id = match ros_core::EntityId::parse(&category_id) {
+        Ok(category_id) => category_id,
+        Err(_) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Category image needs attention • choose an active category".to_owned(),
+            );
+        }
+    };
+    match database.clear_category_image(&category_id, &context) {
+        Ok(()) => workspace_with_status(
+            &application_support_directory,
+            "Category image removed locally".to_owned(),
+        ),
+        Err(ros_storage::StorageError::CategoryArchived) => workspace_with_error(
+            &application_support_directory,
+            "Category image needs attention • this category is no longer active.".to_owned(),
+        ),
+        Err(_) => workspace_with_error(
+            &application_support_directory,
+            "Category image needs attention • it could not be removed. Please try again."
+                .to_owned(),
         ),
     }
 }

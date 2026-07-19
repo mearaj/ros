@@ -67,6 +67,17 @@ Future<void> main() async {
     staffSecurity = await loadCommunityStaffSecurity(
       applicationSupportDirectory: applicationSupportDirectory,
     );
+    // A PIN unlock is local to an active use of the application, not a
+    // permanent sign-in. A process restart must always return a provisioned
+    // restaurant to the lock screen, even if its short-lived session had not
+    // yet reached its inactivity expiry. First-run setup is unaffected: an
+    // unprovisioned workspace bypasses the staff gate until the Owner PIN can
+    // be created after restaurant details are saved.
+    if (staffSecurity.available && staffSecurity.activeStaffId != null) {
+      staffSecurity = await lockCommunityStaff(
+        applicationSupportDirectory: applicationSupportDirectory,
+      );
+    }
     workspace = await loadCommunityWorkspace(
       applicationSupportDirectory: applicationSupportDirectory,
     );

@@ -329,7 +329,9 @@ Enterprise v1 uses an annual, signed entitlement with a branch limit chosen duri
    - Other branch data remains visible and exportable, but becomes read-only until renewal.
    - Cloud-only controls stop; unsynced local events are retained safely for later renewal.
    - The user sees a clear, non-alarming explanation and renewal path.
-6. Paid licenses have an explicit offline grace period set in the commercial policy; this plan proposes 30 days. A device clock change alone must not erase or lock data.
+6. Paid licenses have a 72-hour offline grace period under the accepted
+   commercial policy (ADR 0009). A device clock change alone must not erase or
+   lock data.
 7. Manual, server-issued licenses are acceptable for the first release. Automated subscription billing is a separate integration and must not delay a safe license lifecycle.
 
 ---

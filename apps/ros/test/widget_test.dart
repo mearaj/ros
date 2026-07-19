@@ -343,7 +343,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Menu'));
+      await tester.tap(find.byIcon(Icons.menu_book_outlined));
       await tester.pumpAndSettle();
 
       expect(find.text('Local storage needs attention'), findsOneWidget);
@@ -453,12 +453,60 @@ void main() {
     expect(find.text('Category saved locally'), findsOneWidget);
     await tester.drag(
       find.byKey(const PageStorageKey('category-manager-scroll')),
-      const Offset(0, -700),
+      const Offset(0, -1200),
     );
     await tester.pumpAndSettle();
     expect(find.text('Masala chai'), findsOneWidget);
     expect(find.text('INR 25.00'), findsOneWidget);
   });
+
+  testWidgets(
+    'offers distinct app artwork, catalogue search, upload, and removal for a category image',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1024, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        const RestaurantOperatingSystemApp(
+          coreStatus: 'Restaurant Operating System • Rust operational core',
+          workspace: CommunityWorkspace(
+            storageStatus: 'Category saved locally',
+            setupRequired: false,
+            categories: [
+              CommunityCategoryView(
+                categoryId: '0197d918-7e11-7000-8000-000000000001',
+                displayName: 'Hot drinks',
+                revision: 1,
+                imageAssetKey: 'category_beverages',
+              ),
+            ],
+            products: [],
+            customers: [],
+            openDrafts: [],
+            kitchenTickets: [],
+          ),
+          staffSecurity: _activeOwnerSecurity,
+          applicationSupportDirectory: '/test-support',
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.menu_book_outlined));
+      await tester.pumpAndSettle();
+      final manageImage = find.byTooltip('Manage category image');
+      await tester.tap(manageImage);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Choose app category artwork'), findsOneWidget);
+      expect(find.text('Search Gotigin photos'), findsAtLeastNWidgets(1));
+      expect(find.text('Use my restaurant image'), findsOneWidget);
+      expect(find.text('Remove current image'), findsOneWidget);
+
+      await tester.tap(find.text('Choose app category artwork'));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose category artwork'), findsOneWidget);
+      expect(find.text('Beverages'), findsOneWidget);
+      expect(find.text('Rice & bowls'), findsOneWidget);
+    },
+  );
 
   testWidgets('requires a reason before archiving a menu item', (tester) async {
     await tester.pumpWidget(
@@ -499,7 +547,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(
       find.byKey(const PageStorageKey('category-manager-scroll')),
-      const Offset(0, -700),
+      const Offset(0, -1200),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Manage Masala chai'));

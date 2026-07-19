@@ -20,3 +20,8 @@ After changing Rust APIs in rust/src/api, regenerate the Dart binding:
 Run that command from this directory and commit generated binding changes with
 the Rust API change.
 
+For a clean, unpublished local installation, use the confirmation-gated
+development reset script from the repository root. It clears the matching
+encrypted development database and secure-store credential together; it is not
+for a production/customer install. See
+[`docs/runbooks/local-development.md`](../../docs/runbooks/local-development.md#reset-an-unpublished-local-installation).

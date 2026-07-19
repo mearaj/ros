@@ -7,6 +7,11 @@ license.workspace = true
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
+[[bin]]
+name = "ros_local_uninstall"
+path = "src/bin/ros_local_uninstall.rs"
+required-features = ["development-sqlcipher"]
+
 [features]
 # Cargokit currently builds the default development feature graph. A release
 # artifact must deliberately opt into the production feature and cannot fall

@@ -35,6 +35,9 @@ identity are not yet complete.
 - Locking appends an immutable `locked` event. The latest event for the device
   controls whether a session is active; stale or revoked identities are not
   accepted.
+- A cold application launch explicitly locks any previously active local
+  session before operational data is loaded. The next use therefore requires a
+  staff PIN even when the prior 15-minute inactivity window has not elapsed.
 - Flutter may choose a displayable staff ID for the unlock form, but it never
   supplies a role, actor ID, session record, or authorization decision to any
   mutation. Rust resolves the active session for every bridge mutation.

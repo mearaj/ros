@@ -25,6 +25,53 @@ Existing installs that still hold the pre-rename services
 (`com.gotigin.restaurantos.*.sqlcipher.v1`) are migrated on first open into the
 current `com.gotigin.ros.*.sqlcipher.v1` entries.
 
+## Reset an unpublished local installation
+
+Before the first public production release, use the repository-owned reset
+script when a developer needs a genuinely clean install rather than carrying
+development migrations forward. It is **destructive**, development-only, and
+never selects the production database or credential namespace.
+
+Close ROS first, then inspect the target:
+
+```bash
+python3 scripts/uninstall-local-ros.py --target desktop --dry-run
+```
+
+To remove the desktop Development database, its SQLite sidecars, its matching
+operating-system secure-store credential, its application-support directory,
+and the local Flutter debug bundle:
+
+```bash
+python3 scripts/uninstall-local-ros.py --target desktop --yes
+```
+
+The script refuses to run while the local `ros` process is open. Its Rust
+companion moves the encrypted database aside before it clears the credential;
+if secure-store deletion fails, it restores the database files. It never reads
+or prints a database key. Use `--keep-build` to preserve the debug bundle, or
+`--app-path /path/to/ros.app` to remove an explicitly supplied local desktop
+bundle as well.
+
+Mobile commands remove only an unpublished local install on the selected test
+target:
+
+```bash
+python3 scripts/uninstall-local-ros.py --target android --device <adb-serial> --yes
+python3 scripts/uninstall-local-ros.py --target ios-simulator --device <simulator-udid> --yes
+```
+
+`--erase-ios-simulator` additionally erases the entire selected simulator and
+is therefore never implicit. A physical iPhone/iPad is not offered as a
+"complete uninstall" target: iOS Keychain records can survive an app uninstall
+and require an app-owned recovery/reset design. This is especially important
+once the mobile secure-store adapter is introduced.
+
+This reset is for unpublished development only. It is not a replacement for a
+customer backup, restore, ownership-recovery, update, or release-uninstall
+path. Keep any test backup needed for validation outside the application-
+support directory before running it.
+
 ## Prerequisites
 
 - Flutter stable with Linux desktop support enabled.

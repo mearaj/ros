@@ -406,6 +406,15 @@ Future<CommunityWorkspace> createCommunityCategory({
   displayName: displayName,
 );
 
+/// Imports an editable Indian restaurant starter menu. Every item is imported
+/// disabled at a zero price so the owner must review local pricing and
+/// availability before it can appear at the counter.
+Future<CommunityWorkspace> importCommonStarterMenu({
+  required String applicationSupportDirectory,
+}) => RustLib.instance.api.crateApiSimpleImportCommonStarterMenu(
+  applicationSupportDirectory: applicationSupportDirectory,
+);
+
 /// Enrolls a customer as an active local profile. The active staff session
 /// supplies the actor identity and role; the client cannot impersonate one.
 Future<CommunityWorkspace> createCommunityCustomer({
@@ -599,8 +608,8 @@ Future<CommunityWorkspace> archiveCommunityProduct({
   reason: reason,
 );
 
-/// Archives a category after its active products have been removed. History is
-/// retained for audit and future sync.
+/// Removes an empty category, or a category whose items have never been sold,
+/// from the active catalogue. Retained transactions prevent removal.
 Future<CommunityWorkspace> archiveCommunityCategory({
   required String applicationSupportDirectory,
   required String categoryId,
@@ -611,6 +620,32 @@ Future<CommunityWorkspace> archiveCommunityCategory({
   categoryId: categoryId,
   expectedRevision: expectedRevision,
   reason: reason,
+);
+
+/// Replaces a category image with category-specific app artwork, a verified
+/// Gotigin catalogue image, or a restaurant-owned upload.
+Future<CommunityWorkspace> replaceCommunityCategoryImage({
+  required String applicationSupportDirectory,
+  required String categoryId,
+  Uint8List? restaurantImageBytes,
+  String? builtInImageKey,
+  GotiginCatalogMenuImageSelection? gotiginCatalogImage,
+}) => RustLib.instance.api.crateApiSimpleReplaceCommunityCategoryImage(
+  applicationSupportDirectory: applicationSupportDirectory,
+  categoryId: categoryId,
+  restaurantImageBytes: restaurantImageBytes,
+  builtInImageKey: builtInImageKey,
+  gotiginCatalogImage: gotiginCatalogImage,
+);
+
+/// Removes the current category visual without deleting the category or its
+/// retained image/licence history.
+Future<CommunityWorkspace> clearCommunityCategoryImage({
+  required String applicationSupportDirectory,
+  required String categoryId,
+}) => RustLib.instance.api.crateApiSimpleClearCommunityCategoryImage(
+  applicationSupportDirectory: applicationSupportDirectory,
+  categoryId: categoryId,
 );
 
 /// Replaces the active menu image for a product by appending a new immutable
@@ -940,16 +975,24 @@ class CommunityCategoryView {
   final String categoryId;
   final String displayName;
   final PlatformInt64 revision;
+  final String? imageAssetKey;
+  final Uint8List? imageBytes;
 
   const CommunityCategoryView({
     required this.categoryId,
     required this.displayName,
     required this.revision,
+    this.imageAssetKey,
+    this.imageBytes,
   });
 
   @override
   int get hashCode =>
-      categoryId.hashCode ^ displayName.hashCode ^ revision.hashCode;
+      categoryId.hashCode ^
+      displayName.hashCode ^
+      revision.hashCode ^
+      imageAssetKey.hashCode ^
+      imageBytes.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -958,7 +1001,9 @@ class CommunityCategoryView {
           runtimeType == other.runtimeType &&
           categoryId == other.categoryId &&
           displayName == other.displayName &&
-          revision == other.revision;
+          revision == other.revision &&
+          imageAssetKey == other.imageAssetKey &&
+          imageBytes == other.imageBytes;
 }
 
 /// Current, counter-safe customer projection. Earlier profile revisions and

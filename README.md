@@ -22,6 +22,12 @@ An entitlement changes cloud and coordination capabilities; it never deletes
 customer data or makes a restaurant unable to operate its selected local
 branch.
 
+The edition behavior and release boundaries are defined in
+[docs/editions](docs/editions/README.md). Community Edition is the current
+delivery focus across Android, iOS/iPadOS, Linux, Windows, and macOS; a target
+is not described as release-supported until its platform-specific acceptance
+and publication gates have passed.
+
 ## Architecture
 
     Flutter and Dart client

@@ -44,7 +44,7 @@ use sha2::{Digest, Sha256};
 use url::Url;
 use zeroize::Zeroizing;
 
-const SCHEMA_VERSION: i64 = 34;
+const SCHEMA_VERSION: i64 = 36;
 const LOCAL_SCHEMA_V1: &str =
     include_str!("../../../database/local-migrations/0001_foundation.sql");
 const LOCAL_SCHEMA_V1_CHECKSUM: &str =
@@ -183,6 +183,14 @@ const LOCAL_SCHEMA_V34: &str =
     include_str!("../../../database/local-migrations/0034_owner_recovery_verifier.sql");
 const LOCAL_SCHEMA_V34_CHECKSUM: &str =
     "sha256:64390b038277176d8f77bc9955f5f1db4af385d640134488bfe3665a3ac2aa38";
+const LOCAL_SCHEMA_V35: &str =
+    include_str!("../../../database/local-migrations/0035_category_images.sql");
+const LOCAL_SCHEMA_V35_CHECKSUM: &str =
+    "sha256:31975242e4753c9bbf36e700ae6a843634144840f64e8e483e138e3f1eec8634";
+const LOCAL_SCHEMA_V36: &str =
+    include_str!("../../../database/local-migrations/0036_category_image_catalog_provenance.sql");
+const LOCAL_SCHEMA_V36_CHECKSUM: &str =
+    "sha256:82aa65a1860b0c84cd4748c5eac19696607c049df1e0556c6e7ec17cf42cf768";
 const LOCAL_STAFF_SESSION_MINUTES: i64 = 15;
 const LOCAL_STAFF_PIN_MAXIMUM_FAILED_ATTEMPTS: i64 = 5;
 const LOCAL_STAFF_PIN_THROTTLE_MINUTES: i64 = 15;
@@ -225,6 +233,21 @@ const BUILT_IN_MENU_IMAGE_KEYS: [&str; 20] = [
     "dessert",
     "ice_cream",
     "bakery",
+];
+// These intentionally differ from the dish-and-drink artwork above. A
+// category is a navigation grouping, not a menu item, so it needs a distinct
+// visual language and must never force owners to reuse a dish photo.
+const BUILT_IN_CATEGORY_IMAGE_KEYS: [&str; 10] = [
+    "category_beverages",
+    "category_breakfast",
+    "category_starters",
+    "category_mains",
+    "category_breads",
+    "category_rice",
+    "category_desserts",
+    "category_fast_food",
+    "category_specials",
+    "category_healthy",
 ];
 pub const ENCRYPTED_STORAGE_ENGINE: &str = "SQLCipher-backed SQLite";
 
@@ -290,7 +313,7 @@ struct LocalMigration {
     checksum: &'static str,
 }
 
-const LOCAL_MIGRATIONS: [LocalMigration; 34] = [
+const LOCAL_MIGRATIONS: [LocalMigration; 36] = [
     LocalMigration {
         version: 1,
         sql: LOCAL_SCHEMA_V1,
@@ -461,6 +484,16 @@ const LOCAL_MIGRATIONS: [LocalMigration; 34] = [
         sql: LOCAL_SCHEMA_V34,
         checksum: LOCAL_SCHEMA_V34_CHECKSUM,
     },
+    LocalMigration {
+        version: 35,
+        sql: LOCAL_SCHEMA_V35,
+        checksum: LOCAL_SCHEMA_V35_CHECKSUM,
+    },
+    LocalMigration {
+        version: 36,
+        sql: LOCAL_SCHEMA_V36,
+        checksum: LOCAL_SCHEMA_V36_CHECKSUM,
+    },
 ];
 
 pub(crate) struct DatabaseKey(Zeroizing<[u8; 32]>);
@@ -585,6 +618,42 @@ impl Error for DatabaseBootstrapError {
             Self::DatabaseKeyMissing
             | Self::ExistingKeyWithoutDatabase
             | Self::UnsupportedSecureStoragePlatform => None,
+        }
+    }
+}
+
+/// Failure reported by the development-only local uninstall utility. This is
+/// intentionally separate from normal bootstrap/recovery errors: production
+/// code must never treat a destructive developer reset as an ordinary storage
+/// path.
+#[derive(Debug)]
+pub enum DevelopmentUninstallError {
+    KeyStore(KeyStoreError),
+    Lock(std::io::Error),
+    Filesystem(std::io::Error),
+    UnsafeDatabaseArtifact,
+}
+
+impl fmt::Display for DevelopmentUninstallError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::KeyStore(error) => write!(formatter, "Secure storage failed: {error}"),
+            Self::Lock(_) => formatter.write_str("The local database lock could not be acquired."),
+            Self::Filesystem(_) => {
+                formatter.write_str("The encrypted local database files could not be removed.")
+            }
+            Self::UnsafeDatabaseArtifact => formatter
+                .write_str("The local database path was not a regular file and was not removed."),
+        }
+    }
+}
+
+impl Error for DevelopmentUninstallError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::KeyStore(error) => Some(error),
+            Self::Lock(error) | Self::Filesystem(error) => Some(error),
+            Self::UnsafeDatabaseArtifact => None,
         }
     }
 }
@@ -1980,6 +2049,38 @@ pub struct ProductImage {
     catalog_provenance: Option<ProductImageCatalogProvenance>,
 }
 
+/// Current image assigned to a menu category. Category imagery is presentation
+/// data only: transactions continue to snapshot their product facts and never
+/// depend on a category image.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CategoryImage {
+    category_id: EntityId,
+    asset_key: Option<String>,
+    image_bytes: Option<Vec<u8>>,
+}
+
+impl CategoryImage {
+    fn new(category_id: EntityId, asset_key: Option<String>, image_bytes: Option<Vec<u8>>) -> Self {
+        Self {
+            category_id,
+            asset_key,
+            image_bytes,
+        }
+    }
+
+    pub fn category_id(&self) -> &EntityId {
+        &self.category_id
+    }
+
+    pub fn asset_key(&self) -> Option<&str> {
+        self.asset_key.as_deref()
+    }
+
+    pub fn image_bytes(&self) -> Option<&[u8]> {
+        self.image_bytes.as_deref()
+    }
+}
+
 impl ProductImage {
     fn new(
         product_id: EntityId,
@@ -2169,6 +2270,122 @@ fn reset_orphaned_key_and_create_with_key_store(
         .clear(slot)
         .map_err(DatabaseBootstrapError::KeyStore)?;
     create_fresh_database_with_key_store(path, key_store, slot)
+}
+
+/// Irreversibly clears a **development** desktop installation. This is only
+/// compiled for the bundled-SQLCipher development graph, never exposed over
+/// Flutter/Rust Bridge, and never available in a production feature build.
+///
+/// The primary database plus its SQLite sidecars are first moved aside in the
+/// same directory. If secure-store deletion fails, those files are restored so
+/// the existing local installation remains recoverable. Callers must ensure
+/// the desktop app is completely closed before invoking this operation.
+#[cfg(all(
+    feature = "development-bundled-sqlcipher",
+    feature = "platform-keyring",
+    any(target_os = "windows", target_os = "macos", target_os = "linux")
+))]
+pub fn uninstall_development_platform_database(
+    path: impl AsRef<Path>,
+) -> Result<(), DevelopmentUninstallError> {
+    uninstall_database_and_key_with_store(
+        path.as_ref(),
+        &PlatformDatabaseKeyStore,
+        DatabaseKeySlot::community_default(),
+    )
+}
+
+#[cfg(feature = "platform-keyring")]
+fn uninstall_database_and_key_with_store(
+    path: &Path,
+    key_store: &impl DatabaseKeyStore,
+    slot: DatabaseKeySlot,
+) -> Result<(), DevelopmentUninstallError> {
+    let _bootstrap_lock = acquire_bootstrap_lock(path).map_err(|error| match error {
+        DatabaseBootstrapError::Lock(error) => DevelopmentUninstallError::Lock(error),
+        DatabaseBootstrapError::KeyStore(error) => DevelopmentUninstallError::KeyStore(error),
+        DatabaseBootstrapError::Storage(StorageError::Io(error)) => {
+            DevelopmentUninstallError::Filesystem(error)
+        }
+        DatabaseBootstrapError::DatabaseKeyMissing
+        | DatabaseBootstrapError::ExistingKeyWithoutDatabase
+        | DatabaseBootstrapError::Storage(_)
+        | DatabaseBootstrapError::UnsupportedSecureStoragePlatform => {
+            DevelopmentUninstallError::UnsafeDatabaseArtifact
+        }
+    })?;
+    let operation_id = EntityId::new_v7().to_string();
+    let mut staged_artifacts = Vec::new();
+
+    for artifact in local_database_artifact_paths(path) {
+        match fs::symlink_metadata(&artifact) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                restore_staged_database_artifacts(&staged_artifacts);
+                return Err(DevelopmentUninstallError::Filesystem(error));
+            }
+            Ok(metadata) if !metadata.file_type().is_file() => {
+                restore_staged_database_artifacts(&staged_artifacts);
+                return Err(DevelopmentUninstallError::UnsafeDatabaseArtifact);
+            }
+            Ok(_) => {}
+        }
+
+        let staged = local_database_uninstall_staging_path(&artifact, &operation_id);
+        if let Err(error) = fs::rename(&artifact, &staged) {
+            restore_staged_database_artifacts(&staged_artifacts);
+            return Err(DevelopmentUninstallError::Filesystem(error));
+        }
+        staged_artifacts.push((artifact, staged));
+    }
+
+    if let Err(error) = key_store.clear(slot) {
+        restore_staged_database_artifacts(&staged_artifacts);
+        return Err(DevelopmentUninstallError::KeyStore(error));
+    }
+
+    for (_, staged) in &staged_artifacts {
+        fs::remove_file(staged).map_err(DevelopmentUninstallError::Filesystem)?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "platform-keyring")]
+fn local_database_artifact_paths(path: &Path) -> [PathBuf; 4] {
+    [
+        path.to_path_buf(),
+        local_database_sidecar_path(path, "-journal"),
+        local_database_sidecar_path(path, "-shm"),
+        local_database_sidecar_path(path, "-wal"),
+    ]
+}
+
+#[cfg(feature = "platform-keyring")]
+fn local_database_sidecar_path(path: &Path, suffix: &str) -> PathBuf {
+    let mut sidecar = path.as_os_str().to_os_string();
+    sidecar.push(suffix);
+    PathBuf::from(sidecar)
+}
+
+#[cfg(feature = "platform-keyring")]
+fn local_database_uninstall_staging_path(path: &Path, operation_id: &str) -> PathBuf {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .unwrap_or_else(|| OsStr::new("restaurant.db"));
+    let mut staging_name = OsString::from(".");
+    staging_name.push(file_name);
+    staging_name.push(".ros-local-uninstall-");
+    staging_name.push(operation_id);
+    staging_name.push(".staged");
+    parent.join(staging_name)
+}
+
+#[cfg(feature = "platform-keyring")]
+fn restore_staged_database_artifacts(staged_artifacts: &[(PathBuf, PathBuf)]) {
+    for (original, staged) in staged_artifacts.iter().rev() {
+        let _ = fs::rename(staged, original);
+    }
 }
 
 #[cfg(feature = "platform-keyring")]
@@ -2812,6 +3029,16 @@ impl LocalDatabase {
         let pin_hash = hash_local_staff_pin(pin)?;
         let transaction = begin_immediate_transaction(&self.connection)?;
         ensure_active_branch(&transaction, context.branch_id())?;
+        let duplicate_name: bool = transaction
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM staff_accounts WHERE branch_id = ?1 AND name_key = ?2)",
+                params![context.branch_id().to_string(), display_name.key()],
+                |row| row.get(0),
+            )
+            .map_err(StorageError::Sql)?;
+        if duplicate_name {
+            return Err(StorageError::CatalogConflict);
+        }
         let staff_id = EntityId::new_v7();
         let occurred_at = utc_timestamp(&transaction)?;
         transaction
@@ -3242,6 +3469,17 @@ impl LocalDatabase {
         require_management_authority(context)?;
         let transaction = begin_immediate_transaction(&self.connection)?;
         ensure_active_branch(&transaction, context.branch_id())?;
+
+        let duplicate_active_name: bool = transaction
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM categories WHERE branch_id = ?1 AND name_key = ?2 AND archived_at_utc IS NULL)",
+                params![context.branch_id().to_string(), command.display_name().key()],
+                |row| row.get(0),
+            )
+            .map_err(StorageError::Sql)?;
+        if duplicate_active_name {
+            return Err(StorageError::CatalogConflict);
+        }
 
         let category_id = EntityId::new_v7();
         let occurred_at = utc_timestamp(&transaction)?;
@@ -6629,9 +6867,10 @@ impl LocalDatabase {
         ))
     }
 
-    /// Archives a category without destroying its history. Categories with
-    /// active products must be cleaned up explicitly first, avoiding an
-    /// accidental disappearance from a live menu.
+    /// Archives a category without destroying its history. An empty category,
+    /// or one whose products have never appeared on an order line, may be
+    /// removed from the active catalogue in one action. Products with retained
+    /// transaction history keep the category from being removed.
     pub fn archive_category(
         &self,
         category_id: &EntityId,
@@ -6648,15 +6887,15 @@ impl LocalDatabase {
             return Err(StorageError::CatalogConflict);
         }
 
-        let has_active_products: bool = transaction
+        let has_transacted_products: bool = transaction
             .query_row(
                 "
                 SELECT EXISTS(
                     SELECT 1
-                    FROM products
-                    WHERE branch_id = ?1
-                      AND category_id = ?2
-                      AND archived_at_utc IS NULL
+                    FROM products AS product
+                    JOIN order_lines AS line ON line.product_id = product.product_id
+                    WHERE product.branch_id = ?1
+                      AND product.category_id = ?2
                 )
                 ",
                 params![context.branch_id().to_string(), category_id.to_string()],
@@ -6664,11 +6903,15 @@ impl LocalDatabase {
             )
             .map_err(StorageError::Sql)?;
 
-        if has_active_products {
+        if has_transacted_products {
             return Err(StorageError::CategoryHasActiveProducts);
         }
 
         let occurred_at = utc_timestamp(&transaction)?;
+        let archived_product_count = transaction.execute(
+            "UPDATE products SET is_available = 0, archived_at_utc = ?1, archived_by_actor_id = ?2, archive_reason = ?3, updated_at_utc = ?1, updated_by_actor_id = ?2, revision = revision + 1 WHERE branch_id = ?4 AND category_id = ?5 AND archived_at_utc IS NULL",
+            params![occurred_at, context.actor_id().to_string(), reason.as_str(), context.branch_id().to_string(), category_id.to_string()],
+        ).map_err(StorageError::Sql)?;
         let updated = transaction
             .execute(
                 "
@@ -6719,6 +6962,7 @@ impl LocalDatabase {
             "correlation_id": context.correlation_id().to_string(),
             "actor_role": context.actor_role().as_str(),
             "reason": reason.as_str(),
+            "archived_unused_product_count": archived_product_count,
             "before": { "archived": false },
             "after": { "archived": true },
         })
@@ -7260,6 +7504,259 @@ impl LocalDatabase {
                     .and_then(modifier_option_from_persisted)
             })
             .collect()
+    }
+
+    /// Replaces a category image with distinct app artwork, a restaurant-owned
+    /// upload, or a verified Gotigin catalogue selection. Category imagery is
+    /// not part of financial history, so its current assignment is recorded in
+    /// the category revision and audit chain rather than an invoice snapshot.
+    pub fn replace_category_image(
+        &self,
+        category_id: &EntityId,
+        image: &ProductImageContent,
+        context: &MutationContext,
+    ) -> Result<CategoryImage, StorageError> {
+        require_management_authority(context)?;
+        validate_category_image_content(image)?;
+        let transaction = begin_immediate_transaction(&self.connection)?;
+        ensure_active_branch(&transaction, context.branch_id())?;
+        let category = read_category(&transaction, context.branch_id(), category_id)?;
+        if category.archived() {
+            return Err(StorageError::CategoryArchived);
+        }
+        let (
+            source_kind,
+            asset_key,
+            image_bytes,
+            content_type,
+            pixel_width,
+            pixel_height,
+            sha256,
+            catalog_provenance,
+        ) = match image {
+            ProductImageContent::BuiltIn { asset_key } => (
+                "built_in",
+                Some(asset_key.clone()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ),
+            ProductImageContent::RestaurantUpload {
+                jpeg_bytes,
+                pixel_width,
+                pixel_height,
+            } => (
+                "restaurant_upload",
+                None,
+                Some(jpeg_bytes.clone()),
+                Some("image/jpeg"),
+                Some(*pixel_width),
+                Some(*pixel_height),
+                Some(Sha256::digest(jpeg_bytes).to_vec()),
+                None,
+            ),
+            ProductImageContent::GotiginCatalog {
+                jpeg_bytes,
+                pixel_width,
+                pixel_height,
+                provenance,
+            } => (
+                "gotigin_catalog",
+                None,
+                Some(jpeg_bytes.clone()),
+                Some("image/jpeg"),
+                Some(*pixel_width),
+                Some(*pixel_height),
+                Some(Sha256::digest(jpeg_bytes).to_vec()),
+                Some(provenance.clone()),
+            ),
+        };
+        let occurred_at = utc_timestamp(&transaction)?;
+        let updated = transaction.execute(
+            "UPDATE categories SET image_asset_key = ?1, image_bytes = ?2, image_content_type = ?3, image_pixel_width = ?4, image_pixel_height = ?5, image_sha256 = ?6, updated_at_utc = ?7, updated_by_actor_id = ?8, revision = revision + 1 WHERE category_id = ?9 AND branch_id = ?10 AND revision = ?11 AND archived_at_utc IS NULL",
+            params![asset_key, image_bytes, content_type, pixel_width, pixel_height, sha256, occurred_at, context.actor_id().to_string(), category_id.to_string(), context.branch_id().to_string(), category.revision()],
+        ).map_err(StorageError::Sql)?;
+        if updated != 1 {
+            return Err(StorageError::CatalogConflict);
+        }
+        let payload = json!({
+            "schema_version": 1,
+            "entity_type": "category_image",
+            "entity_id": category_id.to_string(),
+            "revision": category.revision() + 1,
+            "correlation_id": context.correlation_id().to_string(),
+            "actor_role": context.actor_role().as_str(),
+            "after": {
+                "source_kind": source_kind,
+                "asset_key": asset_key.clone(),
+                "content_sha256": sha256.as_deref().map(lowercase_hex),
+                "pixel_width": pixel_width,
+                "pixel_height": pixel_height,
+                "catalog": catalog_provenance.as_ref().map(|provenance| json!({
+                    "image_id": provenance.catalog_image_id(),
+                    "original_content_sha256": lowercase_hex(provenance.original_content_sha256()),
+                    "licence_label": provenance.licence_label(),
+                    "licence_url": provenance.licence_url(),
+                    "service_origin": provenance.service_origin(),
+                    "service_schema_version": provenance.service_schema_version(),
+                })),
+            },
+        })
+        .to_string();
+        let audit_event_id = append_hashed_audit_event(
+            &transaction,
+            context,
+            "catalog.category.image.updated",
+            &payload,
+        )?;
+        if let Some(provenance) = catalog_provenance.as_ref() {
+            transaction
+                .execute(
+                    "
+                    INSERT INTO category_image_catalog_provenance (
+                        category_id,
+                        branch_id,
+                        category_revision,
+                        catalog_image_id,
+                        original_content_sha256,
+                        licence_label,
+                        licence_url,
+                        service_origin,
+                        service_schema_version,
+                        audit_event_id
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                    ",
+                    params![
+                        category_id.to_string(),
+                        context.branch_id().to_string(),
+                        category.revision() + 1,
+                        provenance.catalog_image_id(),
+                        provenance.original_content_sha256(),
+                        provenance.licence_label(),
+                        provenance.licence_url(),
+                        provenance.service_origin(),
+                        provenance.service_schema_version(),
+                        audit_event_id.to_string(),
+                    ],
+                )
+                .map_err(StorageError::Sql)?;
+        }
+        transaction.commit().map_err(StorageError::Sql)?;
+        Ok(CategoryImage::new(
+            category_id.clone(),
+            asset_key,
+            image_bytes,
+        ))
+    }
+
+    /// Clears the current category visual without affecting the category,
+    /// products, financial history, or retained provenance for earlier remote
+    /// selections. The removal itself remains an auditable revision.
+    pub fn clear_category_image(
+        &self,
+        category_id: &EntityId,
+        context: &MutationContext,
+    ) -> Result<(), StorageError> {
+        require_management_authority(context)?;
+        let transaction = begin_immediate_transaction(&self.connection)?;
+        ensure_active_branch(&transaction, context.branch_id())?;
+        let category = read_category(&transaction, context.branch_id(), category_id)?;
+        if category.archived() {
+            return Err(StorageError::CategoryArchived);
+        }
+        let occurred_at = utc_timestamp(&transaction)?;
+        let updated = transaction.execute(
+            "UPDATE categories SET image_asset_key = NULL, image_bytes = NULL, image_content_type = NULL, image_pixel_width = NULL, image_pixel_height = NULL, image_sha256 = NULL, updated_at_utc = ?1, updated_by_actor_id = ?2, revision = revision + 1 WHERE category_id = ?3 AND branch_id = ?4 AND revision = ?5 AND archived_at_utc IS NULL",
+            params![occurred_at, context.actor_id().to_string(), category_id.to_string(), context.branch_id().to_string(), category.revision()],
+        ).map_err(StorageError::Sql)?;
+        if updated != 1 {
+            return Err(StorageError::CatalogConflict);
+        }
+        let payload = json!({
+            "schema_version": 1,
+            "entity_type": "category_image",
+            "entity_id": category_id.to_string(),
+            "revision": category.revision() + 1,
+            "correlation_id": context.correlation_id().to_string(),
+            "actor_role": context.actor_role().as_str(),
+            "after": { "source_kind": serde_json::Value::Null },
+        })
+        .to_string();
+        append_hashed_audit_event(
+            &transaction,
+            context,
+            "catalog.category.image.cleared",
+            &payload,
+        )?;
+        transaction.commit().map_err(StorageError::Sql)
+    }
+
+    /// Returns current category images for active categories. A malformed
+    /// persisted record fails closed instead of crossing the Flutter boundary.
+    pub fn list_category_images(
+        &self,
+        branch_id: &EntityId,
+    ) -> Result<Vec<CategoryImage>, StorageError> {
+        let mut statement = self.connection.prepare(
+            "SELECT category_id, image_asset_key, image_bytes, image_content_type, image_pixel_width, image_pixel_height, image_sha256 FROM categories WHERE branch_id = ?1 AND archived_at_utc IS NULL AND (image_asset_key IS NOT NULL OR image_bytes IS NOT NULL) ORDER BY sort_order, name_key, category_id",
+        ).map_err(StorageError::Sql)?;
+        let rows = statement
+            .query_map([branch_id.to_string()], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<Vec<u8>>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<i64>>(4)?,
+                    row.get::<_, Option<i64>>(5)?,
+                    row.get::<_, Option<Vec<u8>>>(6)?,
+                ))
+            })
+            .map_err(StorageError::Sql)?;
+        rows.map(|row| {
+            let (category_id, asset_key, image_bytes, content_type, width, height, sha256) =
+                row.map_err(StorageError::Sql)?;
+            let category_id = parse_persisted_id(&category_id)?;
+            match (&asset_key, &image_bytes) {
+                (Some(asset_key), None)
+                    if content_type.is_none()
+                        && width.is_none()
+                        && height.is_none()
+                        && sha256.is_none()
+                        && is_supported_builtin_category_image_key(asset_key) =>
+                {
+                    Ok(CategoryImage::new(
+                        category_id,
+                        Some(asset_key.clone()),
+                        None,
+                    ))
+                }
+                (None, Some(image_bytes))
+                    if content_type.as_deref() == Some("image/jpeg")
+                        && width
+                            .is_some_and(|value| (1..=MAX_MENU_IMAGE_WIDTH).contains(&value))
+                        && height
+                            .is_some_and(|value| (1..=MAX_MENU_IMAGE_HEIGHT).contains(&value))
+                        && (1..=MAX_MENU_IMAGE_BYTES).contains(&image_bytes.len())
+                        && sha256.as_ref().is_some_and(|value| {
+                            value.as_slice() == Sha256::digest(image_bytes).as_slice()
+                        }) =>
+                {
+                    Ok(CategoryImage::new(
+                        category_id,
+                        None,
+                        Some(image_bytes.clone()),
+                    ))
+                }
+                _ => Err(StorageError::InvalidPersistedData(
+                    "category image did not match its schema contract".to_owned(),
+                )),
+            }
+        })
+        .collect()
     }
 
     /// Replaces the active menu image by appending a new immutable version and
@@ -8356,6 +8853,34 @@ fn validate_product_image_content(image: &ProductImageContent) -> Result<(), Sto
     Ok(())
 }
 
+fn validate_category_image_content(image: &ProductImageContent) -> Result<(), StorageError> {
+    match image {
+        ProductImageContent::BuiltIn { asset_key } => {
+            if !is_supported_builtin_category_image_key(asset_key) {
+                return Err(StorageError::InvalidProductImage(
+                    "choose a supported built-in category image",
+                ));
+            }
+        }
+        ProductImageContent::RestaurantUpload {
+            jpeg_bytes,
+            pixel_width,
+            pixel_height,
+        } => validate_normalized_product_image(jpeg_bytes, *pixel_width, *pixel_height)?,
+        ProductImageContent::GotiginCatalog {
+            jpeg_bytes,
+            pixel_width,
+            pixel_height,
+            provenance,
+        } => {
+            validate_normalized_product_image(jpeg_bytes, *pixel_width, *pixel_height)?;
+            validate_product_image_catalog_provenance(provenance)?;
+        }
+    }
+
+    Ok(())
+}
+
 fn validate_normalized_product_image(
     jpeg_bytes: &[u8],
     pixel_width: i64,
@@ -8438,6 +8963,14 @@ fn validate_product_image_catalog_provenance(
 
 fn is_supported_builtin_menu_image_key(asset_key: &str) -> bool {
     BUILT_IN_MENU_IMAGE_KEYS.contains(&asset_key)
+}
+
+fn is_supported_builtin_category_image_key(asset_key: &str) -> bool {
+    BUILT_IN_CATEGORY_IMAGE_KEYS.contains(&asset_key)
+        // Categories assigned before the distinct artwork library shipped used
+        // a menu key. Keep those local installs readable and editable; the UI
+        // only offers the new category artwork for every new selection.
+        || is_supported_builtin_menu_image_key(asset_key)
 }
 
 fn looks_like_jpeg(bytes: &[u8]) -> bool {
@@ -11471,6 +12004,19 @@ fn verify_local_schema_contract(connection: &Connection) -> Result<(), StorageEr
                 "referencesaudit_events(event_id)",
             ][..],
             "product image catalogue provenance table contract",
+        ),
+        (
+            "category_image_catalog_provenance",
+            &[
+                "strict",
+                "original_content_sha256blobnotnull",
+                "service_origin='https://ros.gotigin.com'",
+                "service_schema_version=1",
+                "audit_event_idtextnotnullunique",
+                "referencescategories(branch_id,category_id)",
+                "referencesaudit_events(event_id)",
+            ][..],
+            "category image catalogue provenance table contract",
         ),
         (
             "product_deletion_authorizations",
@@ -14782,40 +15328,9 @@ mod tests {
             .expect("valid audit chain");
 
         let reason = MutationReason::new("Seasonal menu refresh").expect("valid reason");
-        assert!(matches!(
-            database.archive_category(
-                category.category_id(),
-                category.revision(),
-                &reason,
-                &context,
-            ),
-            Err(StorageError::CategoryHasActiveProducts)
-        ));
-        assert_eq!(database.audit_event_count().expect("audit count"), 2);
-
-        assert!(matches!(
-            database.archive_product(
-                product.product_id(),
-                product.revision() + 1,
-                &reason,
-                &context,
-            ),
-            Err(StorageError::CatalogConflict)
-        ));
-        assert_eq!(database.audit_event_count().expect("audit count"), 2);
-
-        let archived_product = database
-            .archive_product(product.product_id(), product.revision(), &reason, &context)
-            .expect("product archived");
-        assert!(archived_product.archived());
-        assert!(!archived_product.is_available());
-        assert!(
-            database
-                .list_sale_products(branch.branch_id())
-                .expect("sale products")
-                .is_empty()
-        );
-
+        // A category whose items have never appeared on an order may be
+        // removed as one catalogue action. The item is archived with the
+        // category, rather than being hard-deleted or left sellable.
         let archived_category = database
             .archive_category(
                 category.category_id(),
@@ -14823,8 +15338,14 @@ mod tests {
                 &reason,
                 &context,
             )
-            .expect("category archived");
+            .expect("unused category archived");
         assert!(archived_category.archived());
+        assert!(
+            database
+                .list_sale_products(branch.branch_id())
+                .expect("sale products")
+                .is_empty()
+        );
         assert!(
             database
                 .list_active_categories(branch.branch_id())
@@ -14839,7 +15360,7 @@ mod tests {
             )
             .expect("archived category name can be reused");
         assert_ne!(reused_name.category_id(), category.category_id());
-        assert_eq!(database.audit_event_count().expect("audit count"), 5);
+        assert_eq!(database.audit_event_count().expect("audit count"), 4);
         database
             .verify_device_audit_chain(context.device_id())
             .expect("valid audit chain");
@@ -14986,6 +15507,58 @@ mod tests {
     }
 
     #[test]
+    fn category_images_are_bounded_audited_and_visible_in_the_local_catalogue() {
+        let (_temp, database, branch) = provisioned_database();
+        let context = database
+            .community_owner_context()
+            .expect("stable Community owner context");
+        let category = database
+            .create_category(
+                &CreateCategory::new("Cold drinks", 0).expect("valid category"),
+                &context,
+            )
+            .expect("category created");
+
+        let assigned = database
+            .replace_category_image(
+                category.category_id(),
+                &ProductImageContent::built_in("category_beverages"),
+                &context,
+            )
+            .expect("category image assigned");
+        assert_eq!(assigned.category_id(), category.category_id());
+        assert_eq!(assigned.asset_key(), Some("category_beverages"));
+        assert_eq!(assigned.image_bytes(), None);
+        assert_eq!(database.audit_event_count().expect("audit count"), 2);
+
+        let images = database
+            .list_category_images(branch.branch_id())
+            .expect("category images");
+        assert_eq!(images, vec![assigned]);
+        database
+            .verify_device_audit_chain(context.device_id())
+            .expect("image event preserves the audit chain");
+
+        assert!(matches!(
+            database.replace_category_image(
+                category.category_id(),
+                &ProductImageContent::built_in("biryani"),
+                &context,
+            ),
+            Ok(_)
+        ));
+
+        assert!(matches!(
+            database.replace_category_image(
+                category.category_id(),
+                &ProductImageContent::built_in("not-an-app-asset"),
+                &context,
+            ),
+            Err(StorageError::InvalidProductImage(_))
+        ));
+    }
+
+    #[test]
     fn gotigin_catalog_image_provenance_is_atomic_audited_and_append_only() {
         let (_temp, database, branch) = provisioned_database();
         let context = mutation_context(&database);
@@ -15097,6 +15670,111 @@ mod tests {
                 .execute("DELETE FROM product_image_catalog_provenance", [])
                 .is_err()
         );
+    }
+
+    #[test]
+    fn category_catalogue_image_provenance_is_atomic_audited_and_clearable() {
+        let (_temp, database, branch) = provisioned_database();
+        let context = mutation_context(&database);
+        let category = database
+            .create_category(
+                &CreateCategory::new("Featured collections", 0).expect("category"),
+                &context,
+            )
+            .expect("category created");
+        let provenance = ProductImageCatalogProvenance::new(
+            "01JTEST.CATEGORY:IMAGE-1",
+            vec![0x3b; 32],
+            "Pexels License",
+            "https://www.pexels.com/legal-pages/license/",
+            GOTIGIN_CATALOG_SERVICE_ORIGIN,
+            GOTIGIN_CATALOG_SERVICE_SCHEMA_VERSION,
+        )
+        .expect("valid catalogue provenance");
+        let image = ProductImageContent::gotigin_catalog(
+            vec![0xff, 0xd8, 0x01, 0x02, 0xff, 0xd9],
+            2,
+            1,
+            provenance.clone(),
+        );
+
+        let assigned = database
+            .replace_category_image(category.category_id(), &image, &context)
+            .expect("category image, provenance, and audit commit together");
+        assert_eq!(assigned.asset_key(), None);
+        assert_eq!(
+            assigned.image_bytes(),
+            Some(&[0xff, 0xd8, 0x01, 0x02, 0xff, 0xd9][..])
+        );
+
+        let persisted: (String, Vec<u8>, String, String, String, i64, String) = database
+            .connection
+            .query_row(
+                "SELECT catalog_image_id, original_content_sha256, licence_label, licence_url, service_origin, service_schema_version, audit_event_id FROM category_image_catalog_provenance",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                    ))
+                },
+            )
+            .expect("persisted category provenance");
+        assert_eq!(persisted.0, provenance.catalog_image_id());
+        assert_eq!(persisted.1, provenance.original_content_sha256());
+        assert_eq!(persisted.2, provenance.licence_label());
+        assert_eq!(persisted.3, provenance.licence_url());
+        assert_eq!(persisted.4, provenance.service_origin());
+        assert_eq!(persisted.5, provenance.service_schema_version());
+
+        let audit_payload: String = database
+            .connection
+            .query_row(
+                "SELECT payload_json FROM audit_events WHERE event_id = ?1",
+                [&persisted.6],
+                |row| row.get(0),
+            )
+            .expect("linked category image audit");
+        let audit_payload: serde_json::Value =
+            serde_json::from_str(&audit_payload).expect("valid audit JSON");
+        assert_eq!(audit_payload["after"]["source_kind"], "gotigin_catalog");
+        assert_eq!(
+            audit_payload["after"]["catalog"]["image_id"],
+            provenance.catalog_image_id()
+        );
+
+        database
+            .clear_category_image(category.category_id(), &context)
+            .expect("category image cleared as a new revision");
+        assert!(
+            database
+                .list_category_images(branch.branch_id())
+                .expect("category images")
+                .is_empty()
+        );
+        assert!(
+            database
+                .connection
+                .execute(
+                    "UPDATE category_image_catalog_provenance SET licence_label = licence_label",
+                    [],
+                )
+                .is_err()
+        );
+        assert!(
+            database
+                .connection
+                .execute("DELETE FROM category_image_catalog_provenance", [])
+                .is_err()
+        );
+        database
+            .verify_device_audit_chain(context.device_id())
+            .expect("category catalogue image preserves the audit chain");
     }
 
     #[test]
@@ -17132,6 +17810,30 @@ mod tests {
         .expect("orphaned key can be cleared for an explicit fresh setup");
         open_or_create_with_key_store(&key_without_database_path, &key_only_store, slot)
             .expect("fresh setup reopens after orphaned-key reset");
+    }
+
+    #[test]
+    fn development_uninstall_clears_the_secure_key_database_and_sidecars() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let path = temp.path().join("restaurant-os.development.db");
+        let store = MemoryKeyStore::default();
+        let slot = DatabaseKeySlot::community_default();
+
+        let database = open_or_create_with_key_store(&path, &store, slot)
+            .expect("development database provisioned");
+        drop(database);
+        for sidecar in local_database_artifact_paths(&path).iter().skip(1) {
+            fs::write(sidecar, b"test sidecar").expect("test sidecar written");
+        }
+
+        uninstall_database_and_key_with_store(&path, &store, slot)
+            .expect("development uninstall clears the complete local installation");
+        assert!(
+            local_database_artifact_paths(&path)
+                .iter()
+                .all(|artifact| !artifact.exists())
+        );
+        assert!(store.load(slot).expect("key store read").is_none());
     }
 
     #[test]

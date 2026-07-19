@@ -414,16 +414,20 @@ class _RestaurantShellState extends State<RestaurantShell> {
         key: const ValueKey('inventory'),
         workspace: _workspace,
         canManageCatalog: canManage,
+        canManageStaff: role == 'owner',
         isSaving: _isSaving,
         applicationSupportDirectory: widget.applicationSupportDirectory,
         onCompleteSetup: _completeCommunitySetup,
         onCreateCategory: _createCategory,
+        onImportStarterMenu: _importCommonStarterMenu,
         onCreateProduct: _createProduct,
         onUpdateProductPrice: _updateProductPrice,
         onSetProductAvailability: _setProductAvailability,
         onSetProductTaxTreatment: _setProductTaxTreatment,
         onArchiveProduct: _archiveProduct,
         onArchiveCategory: _archiveCategory,
+        onReplaceCategoryImage: _replaceCategoryImage,
+        onClearCategoryImage: _clearCategoryImage,
         onReplaceProductImage: _replaceProductImage,
         onDeleteUnusedProduct: _deleteUnusedProduct,
         onCreateProductModifierOption: _createProductModifierOption,
@@ -602,6 +606,19 @@ class _RestaurantShellState extends State<RestaurantShell> {
     }
   }
 
+  Future<void> _importCommonStarterMenu() async {
+    if (_isSaving || widget.applicationSupportDirectory.isEmpty) return;
+    setState(() => _isSaving = true);
+    try {
+      final workspace = await importCommonStarterMenu(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+      );
+      if (mounted) setState(() => _workspace = workspace);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   Future<void> _archiveCategory({
     required String categoryId,
     required int expectedRevision,
@@ -669,6 +686,54 @@ class _RestaurantShellState extends State<RestaurantShell> {
           _isSaving = false;
         });
       }
+    }
+  }
+
+  Future<void> _replaceCategoryImage({
+    required String categoryId,
+    Uint8List? restaurantImageBytes,
+    String? builtInImageKey,
+    _RemoteMenuImageSelection? catalogImage,
+  }) async {
+    if (_isSaving || widget.applicationSupportDirectory.isEmpty) return;
+    setState(() => _isSaving = true);
+    try {
+      final workspace = await replaceCommunityCategoryImage(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+        categoryId: categoryId,
+        restaurantImageBytes: catalogImage == null
+            ? restaurantImageBytes
+            : null,
+        builtInImageKey: builtInImageKey,
+        gotiginCatalogImage: catalogImage == null
+            ? null
+            : GotiginCatalogMenuImageSelection(
+                catalogImageId: catalogImage.image.imageId,
+                originalImageBytes: catalogImage.bytes,
+                contentSha256: catalogImage.image.contentSha256,
+                licenceLabel: catalogImage.image.licence,
+                licenceUrl: catalogImage.image.licenceUrl.toString(),
+                serviceOrigin: remoteMenuImageCatalogOrigin,
+                serviceSchemaVersion: 1,
+              ),
+      );
+      if (mounted) setState(() => _workspace = workspace);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _clearCategoryImage({required String categoryId}) async {
+    if (_isSaving || widget.applicationSupportDirectory.isEmpty) return;
+    setState(() => _isSaving = true);
+    try {
+      final workspace = await clearCommunityCategoryImage(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+        categoryId: categoryId,
+      );
+      if (mounted) setState(() => _workspace = workspace);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -2473,6 +2538,8 @@ typedef _CommunitySetupSubmit =
 
 typedef _CreateCategory = Future<void> Function(String displayName);
 
+typedef _ImportStarterMenu = Future<void> Function();
+
 typedef _ArchiveCategory =
     Future<void> Function({
       required String categoryId,
@@ -2486,6 +2553,17 @@ typedef _ReplaceProductImage =
       Uint8List? restaurantImageBytes,
       String? builtInImageKey,
     });
+
+typedef _ReplaceCategoryImage =
+    Future<void> Function({
+      required String categoryId,
+      Uint8List? restaurantImageBytes,
+      String? builtInImageKey,
+      _RemoteMenuImageSelection? catalogImage,
+    });
+
+typedef _ClearCategoryImage =
+    Future<void> Function({required String categoryId});
 
 typedef _CreateProduct =
     Future<void> Function({
@@ -2565,11 +2643,15 @@ class _CatalogWorkspace extends StatelessWidget {
   const _CatalogWorkspace({
     required this.workspace,
     required this.canManageCatalog,
+    required this.canManageStaff,
     required this.isSaving,
     required this.applicationSupportDirectory,
     required this.onCompleteSetup,
     required this.onCreateCategory,
+    required this.onImportStarterMenu,
     required this.onArchiveCategory,
+    required this.onReplaceCategoryImage,
+    required this.onClearCategoryImage,
     required this.onCreateProduct,
     required this.onUpdateProductPrice,
     required this.onSetProductAvailability,
@@ -2586,11 +2668,15 @@ class _CatalogWorkspace extends StatelessWidget {
 
   final CommunityWorkspace workspace;
   final bool canManageCatalog;
+  final bool canManageStaff;
   final bool isSaving;
   final String applicationSupportDirectory;
   final _CommunitySetupSubmit onCompleteSetup;
   final _CreateCategory onCreateCategory;
+  final _ImportStarterMenu onImportStarterMenu;
   final _ArchiveCategory onArchiveCategory;
+  final _ReplaceCategoryImage onReplaceCategoryImage;
+  final _ClearCategoryImage onClearCategoryImage;
   final _CreateProduct onCreateProduct;
   final _UpdateProductPrice onUpdateProductPrice;
   final _SetProductAvailability onSetProductAvailability;
@@ -2625,14 +2711,18 @@ class _CatalogWorkspace extends StatelessWidget {
               key: const ValueKey('category-manager'),
               workspace: workspace,
               isSaving: isSaving,
+              canManageStaff: canManageStaff,
               applicationSupportDirectory: applicationSupportDirectory,
               onCreateCategory: onCreateCategory,
+              onImportStarterMenu: onImportStarterMenu,
               onArchiveCategory: onArchiveCategory,
+              onClearCategoryImage: onClearCategoryImage,
               onCreateProduct: onCreateProduct,
               onUpdateProductPrice: onUpdateProductPrice,
               onSetProductAvailability: onSetProductAvailability,
               onSetProductTaxTreatment: onSetProductTaxTreatment,
               onArchiveProduct: onArchiveProduct,
+              onReplaceCategoryImage: onReplaceCategoryImage,
               onReplaceProductImage: onReplaceProductImage,
               onDeleteUnusedProduct: onDeleteUnusedProduct,
               onCreateProductModifierOption: onCreateProductModifierOption,
@@ -3002,9 +3092,13 @@ class _CategoryManager extends StatefulWidget {
   const _CategoryManager({
     required this.workspace,
     required this.isSaving,
+    required this.canManageStaff,
     required this.applicationSupportDirectory,
     required this.onCreateCategory,
+    required this.onImportStarterMenu,
     required this.onArchiveCategory,
+    required this.onReplaceCategoryImage,
+    required this.onClearCategoryImage,
     required this.onCreateProduct,
     required this.onUpdateProductPrice,
     required this.onSetProductAvailability,
@@ -3021,9 +3115,13 @@ class _CategoryManager extends StatefulWidget {
 
   final CommunityWorkspace workspace;
   final bool isSaving;
+  final bool canManageStaff;
   final String applicationSupportDirectory;
   final _CreateCategory onCreateCategory;
+  final _ImportStarterMenu onImportStarterMenu;
   final _ArchiveCategory onArchiveCategory;
+  final _ReplaceCategoryImage onReplaceCategoryImage;
+  final _ClearCategoryImage onClearCategoryImage;
   final _CreateProduct onCreateProduct;
   final _UpdateProductPrice onUpdateProductPrice;
   final _SetProductAvailability onSetProductAvailability;
@@ -3134,6 +3232,20 @@ class _CategoryManagerState extends State<_CategoryManager> {
                       icon: const Icon(Icons.percent_outlined),
                       label: const Text('Tax rates'),
                     ),
+                    if (widget.canManageStaff)
+                      OutlinedButton.icon(
+                        onPressed: () => showModalBottomSheet<void>(
+                          context: context,
+                          isScrollControlled: true,
+                          showDragHandle: true,
+                          builder: (_) => _StaffManagementSheet(
+                            applicationSupportDirectory:
+                                widget.applicationSupportDirectory,
+                          ),
+                        ),
+                        icon: const Icon(Icons.manage_accounts_outlined),
+                        label: const Text('Team & PINs'),
+                      ),
                   ],
                 ),
               ),
@@ -3194,6 +3306,16 @@ class _CategoryManagerState extends State<_CategoryManager> {
                             minimumSize: const Size(154, 52),
                           ),
                         ),
+                        OutlinedButton.icon(
+                          onPressed: widget.isSaving
+                              ? null
+                              : _confirmStarterMenuImport,
+                          icon: const Icon(Icons.auto_awesome_outlined),
+                          label: const Text('Starter menu'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(150, 52),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -3209,20 +3331,18 @@ class _CategoryManagerState extends State<_CategoryManager> {
                     child: Card(
                       child: ListTile(
                         key: ValueKey(category.categoryId),
-                        leading: Container(
+                        leading: SizedBox(
                           height: 38,
                           width: 38,
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer,
+                          child: CategoryImage(
+                            assetKey: category.imageAssetKey,
+                            imageBytes: category.imageBytes,
+                            fallbackIcon: Icons.restaurant_menu,
                             borderRadius: const BorderRadius.all(
                               Radius.circular(12),
                             ),
-                          ),
-                          child: Icon(
-                            Icons.restaurant_menu,
-                            color: Theme.of(context).colorScheme.primary,
+                            cacheWidth: 76,
+                            cacheHeight: 76,
                           ),
                         ),
                         title: Text(
@@ -3230,12 +3350,24 @@ class _CategoryManagerState extends State<_CategoryManager> {
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                         subtitle: const Text('Active • saved locally'),
-                        trailing: IconButton(
-                          tooltip: 'Archive category',
-                          onPressed: widget.isSaving
-                              ? null
-                              : () => _archiveCategory(category),
-                          icon: const Icon(Icons.archive_outlined),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Manage category image',
+                              onPressed: widget.isSaving
+                                  ? null
+                                  : () => _manageCategoryImage(category),
+                              icon: const Icon(Icons.image_outlined),
+                            ),
+                            IconButton(
+                              tooltip: 'Remove category',
+                              onPressed: widget.isSaving
+                                  ? null
+                                  : () => _archiveCategory(category),
+                              icon: const Icon(Icons.archive_outlined),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -3329,6 +3461,29 @@ class _CategoryManagerState extends State<_CategoryManager> {
     }
   }
 
+  Future<void> _confirmStarterMenuImport() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Import common starter menu?'),
+        content: const Text(
+          'This adds common Indian restaurant categories and menu items. Every imported item starts disabled at ₹0, so review its price and resume it before selling.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Import menu'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) await widget.onImportStarterMenu();
+  }
+
   void _selectDefaultCategoryIfNeeded() {
     final selectedCategoryExists = widget.workspace.categories.any(
       (category) => category.categoryId == _selectedCategoryId,
@@ -3340,54 +3495,151 @@ class _CategoryManagerState extends State<_CategoryManager> {
     }
   }
 
-  Future<void> _archiveCategory(CommunityCategoryView category) async {
-    final reasonController = TextEditingController();
-    try {
-      final reason = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text('Archive ${category.displayName}?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Active products must be removed first. Category history stays retained.',
+  Future<void> _manageCategoryImage(CommunityCategoryView category) async {
+    final action = await showModalBottomSheet<_CategoryImageAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _CategoryImageSourceSheet(
+        category: category,
+        hasImage: category.imageAssetKey != null || category.imageBytes != null,
+      ),
+    );
+    if (!mounted || action == null) return;
+
+    switch (action) {
+      case _CategoryImageAction.appArtwork:
+        final imageKey = await showModalBottomSheet<String>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (context) => const _BuiltInCategoryImageChooser(),
+        );
+        if (imageKey != null && mounted) {
+          await widget.onReplaceCategoryImage(
+            categoryId: category.categoryId,
+            builtInImageKey: imageKey,
+          );
+        }
+      case _CategoryImageAction.gotiginCatalogue:
+        final selection = await showModalBottomSheet<_RemoteMenuImageSelection>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (context) => const _RemoteMenuImageChooser(
+            title: 'Search category photos',
+            description:
+                'Optional online catalogue • select a licensed visual for this category.',
+            queryLabel: 'Category, cuisine, or theme',
+          ),
+        );
+        if (selection != null && mounted) {
+          await widget.onReplaceCategoryImage(
+            categoryId: category.categoryId,
+            catalogImage: selection,
+          );
+        }
+      case _CategoryImageAction.restaurantUpload:
+        await _pickCategoryRestaurantImage(category);
+      case _CategoryImageAction.remove:
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text('Remove ${category.displayName} image?'),
+            content: const Text(
+              'The category stays active. This only removes its current visual; previous image and licence history stay recorded locally.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Keep image'),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reasonController,
-                maxLength: 500,
-                autofocus: true,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Reason'),
+              FilledButton.tonal(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Remove image'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final value = reasonController.text.trim();
-                if (value.length < 3) return;
-                Navigator.of(dialogContext).pop(value);
-              },
-              child: const Text('Archive category'),
-            ),
-          ],
-        ),
-      );
-      if (reason == null) return;
-      await widget.onArchiveCategory(
-        categoryId: category.categoryId,
-        expectedRevision: category.revision,
-        reason: reason,
-      );
-    } finally {
-      reasonController.dispose();
+        );
+        if (confirmed == true && mounted) {
+          await widget.onClearCategoryImage(categoryId: category.categoryId);
+        }
     }
+  }
+
+  Future<void> _pickCategoryRestaurantImage(
+    CommunityCategoryView category,
+  ) async {
+    try {
+      final result = await FilePicker.pickFiles(
+        allowMultiple: false,
+        type: FileType.custom,
+        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
+        withData: true,
+      );
+      if (!mounted || result == null) return;
+      final file = result.files.single;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        _showImageMessage(
+          'That image could not be read. Please choose a PNG, JPEG, or WebP image.',
+        );
+        return;
+      }
+      if (bytes.lengthInBytes > _maximumSourceImageBytes) {
+        _showImageMessage(
+          'This image is too large to prepare safely. Choose a file below 32 MB.',
+        );
+        return;
+      }
+      final prepared = await _prepareMenuImage(bytes);
+      if (!mounted || prepared == null) return;
+      final confirmed = await _confirmRestaurantImageRights(
+        context,
+        imageBytes: prepared,
+        imageName: file.name,
+        targetLabel: category.displayName,
+      );
+      if (confirmed && mounted) {
+        await widget.onReplaceCategoryImage(
+          categoryId: category.categoryId,
+          restaurantImageBytes: prepared,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showImageMessage(
+          'The image picker could not open. Please try again or choose a different image.',
+        );
+      }
+    }
+  }
+
+  Future<void> _archiveCategory(CommunityCategoryView category) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Remove ${category.displayName}?'),
+        content: const Text(
+          'An empty category, or one containing only never-sold menu items, is removed from the active menu. Categories with sold items are kept for history.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove category'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await widget.onArchiveCategory(
+      categoryId: category.categoryId,
+      expectedRevision: category.revision,
+      reason: 'Owner removed unused category',
+    );
   }
 
   Future<void> _createProduct() async {
@@ -5018,6 +5270,283 @@ class _BuiltInImageChooser extends StatelessWidget {
   }
 }
 
+enum _CategoryImageAction {
+  appArtwork,
+  gotiginCatalogue,
+  restaurantUpload,
+  remove,
+}
+
+class _CategoryImageSourceSheet extends StatelessWidget {
+  const _CategoryImageSourceSheet({
+    required this.category,
+    required this.hasImage,
+  });
+
+  final CommunityCategoryView category;
+  final bool hasImage;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Category image — ${category.displayName}',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Choose distinct category artwork, a verified Gotigin photo, or an image your restaurant is allowed to use.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 14),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                child: Icon(Icons.auto_awesome_mosaic_outlined),
+              ),
+              title: const Text('Choose app category artwork'),
+              subtitle: const Text(
+                'Offline, category-specific visuals included with the app',
+              ),
+              onTap: () =>
+                  Navigator.of(context).pop(_CategoryImageAction.appArtwork),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(child: Icon(Icons.cloud_outlined)),
+              title: const Text('Search Gotigin photos'),
+              subtitle: const Text(
+                'Optional online catalogue with retained licence details',
+              ),
+              onTap: () => Navigator.of(
+                context,
+              ).pop(_CategoryImageAction.gotiginCatalogue),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                child: Icon(Icons.add_photo_alternate_outlined),
+              ),
+              title: const Text('Use my restaurant image'),
+              subtitle: const Text(
+                'JPEG, PNG, or WebP; compressed privately on this device',
+              ),
+              onTap: () => Navigator.of(
+                context,
+              ).pop(_CategoryImageAction.restaurantUpload),
+            ),
+            if (hasImage) ...[
+              const Divider(),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: colorScheme.errorContainer,
+                  foregroundColor: colorScheme.onErrorContainer,
+                  child: const Icon(Icons.delete_outline),
+                ),
+                title: const Text('Remove current image'),
+                subtitle: const Text('Keep the category and its history'),
+                onTap: () =>
+                    Navigator.of(context).pop(_CategoryImageAction.remove),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BuiltInCategoryImageChooser extends StatelessWidget {
+  const _BuiltInCategoryImageChooser();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: FractionallySizedBox(
+        heightFactor: 0.72,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Choose category artwork',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'These app visuals are designed for menu sections, not reused dish photos.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 680
+                        ? 4
+                        : constraints.maxWidth >= 440
+                        ? 3
+                        : 2;
+                    return GridView.builder(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        mainAxisExtent: 142,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                      ),
+                      itemCount: _builtInCategoryImageOptions.length,
+                      itemBuilder: (context, index) {
+                        final option = _builtInCategoryImageOptions[index];
+                        return Semantics(
+                          button: true,
+                          label: 'Use ${option.label} category artwork',
+                          child: InkWell(
+                            onTap: () => Navigator.of(context).pop(option.key),
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(16),
+                            ),
+                            child: Ink(
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHighest,
+                                borderRadius: const BorderRadius.all(
+                                  Radius.circular(16),
+                                ),
+                                border: Border.all(
+                                  color: colorScheme.outlineVariant,
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(
+                                      height: 78,
+                                      width: double.infinity,
+                                      child: CategoryImage(
+                                        assetKey: option.key,
+                                        fallbackIcon: option.icon,
+                                        borderRadius: const BorderRadius.all(
+                                          Radius.circular(8),
+                                        ),
+                                        cacheWidth: 192,
+                                        cacheHeight: 144,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      option.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<bool> _confirmRestaurantImageRights(
+  BuildContext context, {
+  required Uint8List imageBytes,
+  required String imageName,
+  required String targetLabel,
+}) async {
+  var confirmedRights = false;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text('Use this image for $targetLabel?'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.all(Radius.circular(12)),
+                child: AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: Image.memory(
+                    imageBytes,
+                    fit: BoxFit.cover,
+                    excludeFromSemantics: true,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                imageName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              CheckboxListTile(
+                value: confirmedRights,
+                onChanged: (value) =>
+                    setDialogState(() => confirmedRights = value ?? false),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text(
+                  'I confirm that this restaurant owns or is licensed to use this image.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: confirmedRights
+                ? () => Navigator.of(dialogContext).pop(true)
+                : null,
+            child: const Text('Use image'),
+          ),
+        ],
+      ),
+    ),
+  );
+  return confirmed ?? false;
+}
+
 class _RemoteMenuImageSelection {
   const _RemoteMenuImageSelection({required this.image, required this.bytes});
 
@@ -5028,7 +5557,16 @@ class _RemoteMenuImageSelection {
 }
 
 class _RemoteMenuImageChooser extends StatefulWidget {
-  const _RemoteMenuImageChooser();
+  const _RemoteMenuImageChooser({
+    this.title = 'Search Gotigin photos',
+    this.description =
+        'Optional online catalogue • every selected image is checked before it is saved locally.',
+    this.queryLabel = 'Dish or cuisine',
+  });
+
+  final String title;
+  final String description;
+  final String queryLabel;
 
   @override
   State<_RemoteMenuImageChooser> createState() =>
@@ -5110,14 +5648,14 @@ class _RemoteMenuImageChooserState extends State<_RemoteMenuImageChooser> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Search Gotigin photos',
+                widget.title,
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 6),
               Text(
-                'Optional online catalogue • every selected image is checked before it is saved locally.',
+                widget.description,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -5130,8 +5668,8 @@ class _RemoteMenuImageChooserState extends State<_RemoteMenuImageChooser> {
                       controller: _queryController,
                       textInputAction: TextInputAction.search,
                       onSubmitted: (_) => _search(),
-                      decoration: const InputDecoration(
-                        labelText: 'Dish or cuisine',
+                      decoration: InputDecoration(
+                        labelText: widget.queryLabel,
                         prefixIcon: Icon(Icons.search),
                       ),
                     ),
@@ -5194,7 +5732,22 @@ class _RemoteMenuImageChooserState extends State<_RemoteMenuImageChooser> {
         final image = items[index];
         final isSelecting = _selectingImageId == image.imageId;
         return ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.restaurant_outlined)),
+          leading: ClipRRect(
+            borderRadius: const BorderRadius.all(Radius.circular(10)),
+            child: SizedBox(
+              height: 48,
+              width: 56,
+              child: Image.network(
+                image.thumbnailUrl.toString(),
+                fit: BoxFit.cover,
+                excludeFromSemantics: true,
+                errorBuilder: (_, _, _) => const ColoredBox(
+                  color: Color(0xFFE5E7EB),
+                  child: Icon(Icons.restaurant_outlined),
+                ),
+              ),
+            ),
+          ),
           title: Text(image.displayName),
           subtitle: const Text('Verified Gotigin catalogue image'),
           trailing: isSelecting
@@ -5223,6 +5776,71 @@ class _BuiltInMenuImageOption {
   final String label;
   final IconData icon;
 }
+
+class _BuiltInCategoryImageOption {
+  const _BuiltInCategoryImageOption({
+    required this.key,
+    required this.label,
+    required this.icon,
+  });
+
+  final String key;
+  final String label;
+  final IconData icon;
+}
+
+const _builtInCategoryImageOptions = <_BuiltInCategoryImageOption>[
+  _BuiltInCategoryImageOption(
+    key: 'category_beverages',
+    label: 'Beverages',
+    icon: Icons.local_drink_outlined,
+  ),
+  _BuiltInCategoryImageOption(
+    key: 'category_breakfast',
+    label: 'Breakfast',
+    icon: Icons.wb_sunny_outlined,
+  ),
+  _BuiltInCategoryImageOption(
+    key: 'category_starters',
+    label: 'Starters',
+    icon: Icons.tapas_outlined,
+  ),
+  _BuiltInCategoryImageOption(
+    key: 'category_mains',
+    label: 'Main course',
+    icon: Icons.restaurant_menu_outlined,
+  ),
+  _BuiltInCategoryImageOption(
+    key: 'category_breads',
+    label: 'Breads',
+    icon: Icons.bakery_dining_outlined,
+  ),
+  _BuiltInCategoryImageOption(
+    key: 'category_rice',
+    label: 'Rice & bowls',
+    icon: Icons.rice_bowl_outlined,
+  ),
+  _BuiltInCategoryImageOption(
+    key: 'category_desserts',
+    label: 'Desserts',
+    icon: Icons.cake_outlined,
+  ),
+  _BuiltInCategoryImageOption(
+    key: 'category_fast_food',
+    label: 'Fast food',
+    icon: Icons.lunch_dining_outlined,
+  ),
+  _BuiltInCategoryImageOption(
+    key: 'category_specials',
+    label: 'Specials',
+    icon: Icons.star_outline,
+  ),
+  _BuiltInCategoryImageOption(
+    key: 'category_healthy',
+    label: 'Healthy',
+    icon: Icons.eco_outlined,
+  ),
+];
 
 const _builtInMenuImageOptions = <_BuiltInMenuImageOption>[
   _BuiltInMenuImageOption(
@@ -6324,7 +6942,7 @@ class _WorkspaceStatus extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
+              child: SelectableText(
                 status,
                 style: TextStyle(color: color, fontWeight: FontWeight.w700),
               ),

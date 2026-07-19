@@ -67,3 +67,72 @@ class MenuItemImage extends StatelessWidget {
 }
 
 String menuItemAssetPath(String assetKey) => 'assets/menu/$assetKey.webp';
+
+/// Displays a category visual. Category defaults have their own app artwork
+/// instead of reusing the dish photos available to individual menu items.
+/// Earlier local installs can contain a legacy menu asset key; render that
+/// safely so upgrading never makes an existing category image disappear.
+class CategoryImage extends StatelessWidget {
+  const CategoryImage({
+    this.assetKey,
+    this.imageBytes,
+    this.fallbackIcon = Icons.category_outlined,
+    this.borderRadius,
+    this.fit = BoxFit.cover,
+    this.cacheWidth,
+    this.cacheHeight,
+    super.key,
+  });
+
+  final String? assetKey;
+  final Uint8List? imageBytes;
+  final IconData fallbackIcon;
+  final BorderRadius? borderRadius;
+  final BoxFit fit;
+  final int? cacheWidth;
+  final int? cacheHeight;
+
+  bool get _isCategoryArtwork => assetKey?.startsWith('category_') ?? false;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = imageBytes != null
+        ? Image.memory(
+            imageBytes!,
+            fit: fit,
+            cacheWidth: cacheWidth,
+            cacheHeight: cacheHeight,
+            excludeFromSemantics: true,
+            errorBuilder: (_, _, _) => _fallback(context),
+          )
+        : assetKey != null
+        ? Image.asset(
+            _isCategoryArtwork
+                ? categoryAssetPath(assetKey!)
+                : menuItemAssetPath(assetKey!),
+            fit: fit,
+            cacheWidth: cacheWidth,
+            cacheHeight: cacheHeight,
+            excludeFromSemantics: true,
+            errorBuilder: (_, _, _) => _fallback(context),
+          )
+        : _fallback(context);
+
+    final content = SizedBox.expand(child: image);
+    return borderRadius == null
+        ? content
+        : ClipRRect(borderRadius: borderRadius!, child: content);
+  }
+
+  Widget _fallback(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: colorScheme.secondaryContainer,
+      child: Center(
+        child: Icon(fallbackIcon, color: colorScheme.secondary, size: 30),
+      ),
+    );
+  }
+}
+
+String categoryAssetPath(String assetKey) => 'assets/categories/$assetKey.webp';
