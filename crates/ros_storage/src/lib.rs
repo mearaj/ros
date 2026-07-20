@@ -2451,32 +2451,31 @@ pub fn uninstall_development_local_install(
     profile_ids.insert("default".to_owned());
 
     let registry_path = support_directory.join("restaurant-profiles.json");
-    if registry_path.is_file() {
-        if let Ok(bytes) = fs::read(&registry_path) {
-            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) {
-                if let Some(active) = value.get("active_profile_id").and_then(|v| v.as_str()) {
-                    profile_ids.insert(active.to_owned());
-                }
-                if let Some(profiles) = value.get("profiles").and_then(|v| v.as_array()) {
-                    for profile in profiles {
-                        if let Some(id) = profile.get("profile_id").and_then(|v| v.as_str()) {
-                            profile_ids.insert(id.to_owned());
-                        }
-                    }
+    if registry_path.is_file()
+        && let Ok(bytes) = fs::read(&registry_path)
+        && let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes)
+    {
+        if let Some(active) = value.get("active_profile_id").and_then(|v| v.as_str()) {
+            profile_ids.insert(active.to_owned());
+        }
+        if let Some(profiles) = value.get("profiles").and_then(|v| v.as_array()) {
+            for profile in profiles {
+                if let Some(id) = profile.get("profile_id").and_then(|v| v.as_str()) {
+                    profile_ids.insert(id.to_owned());
                 }
             }
         }
     }
 
     let profiles_root = support_directory.join("profiles");
-    if profiles_root.is_dir() {
-        if let Ok(entries) = fs::read_dir(&profiles_root) {
-            for entry in entries.flatten() {
-                if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
-                    if let Some(name) = entry.file_name().to_str() {
-                        profile_ids.insert(name.to_owned());
-                    }
-                }
+    if profiles_root.is_dir()
+        && let Ok(entries) = fs::read_dir(&profiles_root)
+    {
+        for entry in entries.flatten() {
+            if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false)
+                && let Some(name) = entry.file_name().to_str()
+            {
+                profile_ids.insert(name.to_owned());
             }
         }
     }
@@ -15849,14 +15848,15 @@ mod tests {
             .verify_device_audit_chain(context.device_id())
             .expect("image event preserves the audit chain");
 
-        assert!(matches!(
-            database.replace_category_image(
-                category.category_id(),
-                &ProductImageContent::built_in("biryani"),
-                &context,
-            ),
-            Ok(_)
-        ));
+        assert!(
+            database
+                .replace_category_image(
+                    category.category_id(),
+                    &ProductImageContent::built_in("biryani"),
+                    &context,
+                )
+                .is_ok()
+        );
 
         assert!(matches!(
             database.replace_category_image(
