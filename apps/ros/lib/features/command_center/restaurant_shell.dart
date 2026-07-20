@@ -3045,17 +3045,25 @@ class _Brand extends StatelessWidget {
 
     return Row(
       children: [
-        Container(
-          height: 38,
-          width: 38,
-          decoration: BoxDecoration(
-            color: primary,
-            borderRadius: const BorderRadius.all(Radius.circular(12)),
-          ),
-          child: Icon(
-            Icons.restaurant_menu,
-            color: Theme.of(context).colorScheme.onPrimary,
-            size: 21,
+        ClipRRect(
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
+          child: Image.asset(
+            'assets/brand/gtg_logo.png',
+            height: 38,
+            width: 38,
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (context, error, stackTrace) => Container(
+              height: 38,
+              width: 38,
+              color: primary,
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.restaurant_menu,
+                color: Theme.of(context).colorScheme.onPrimary,
+                size: 21,
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 10),

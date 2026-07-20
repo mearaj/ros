@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
-  static const Color brand = Color(0xFF126B4A);
-  static const Color brandBright = Color(0xFF2F9B6A);
+  /// Deep indigo sampled from the GTG mark.
+  static const Color brand = Color(0xFF060024);
+
+  /// Brighter indigo for dark surfaces and selected chrome.
+  static const Color brandBright = Color(0xFF8B7AE8);
+
+  /// Warm accent kept for contrast against the cool brand family.
   static const Color secondary = Color(0xFFB85C2A);
 
   static ThemeData light() {
-    const canvas = Color(0xFFF8F9F7);
-    const ink = Color(0xFF17211D);
-    const mint = Color(0xFFE6F4EC);
-    const line = Color(0xFFD9E1DB);
+    const canvas = Color(0xFFF7F6FB);
+    const ink = Color(0xFF14121F);
+    const wash = Color(0xFFEEECF6);
+    const line = Color(0xFFD8D5E3);
+    // Mid indigo so filled controls stay readable on light surfaces.
+    const primary = Color(0xFF2A215C);
 
     final colors =
         ColorScheme.fromSeed(
@@ -17,8 +24,8 @@ abstract final class AppTheme {
           brightness: Brightness.light,
         ).copyWith(
           surface: Colors.white,
-          surfaceContainerHighest: const Color(0xFFF0F3F0),
-          primary: brand,
+          surfaceContainerHighest: const Color(0xFFF0EEF7),
+          primary: primary,
           onPrimary: Colors.white,
           secondary: secondary,
           onSecondary: Colors.white,
@@ -29,7 +36,7 @@ abstract final class AppTheme {
       colors: colors,
       canvas: canvas,
       ink: ink,
-      mint: mint,
+      wash: wash,
       line: line,
       cardFill: Colors.white,
       inputFill: Colors.white,
@@ -38,11 +45,11 @@ abstract final class AppTheme {
   }
 
   static ThemeData dark() {
-    const canvas = Color(0xFF0F1412);
-    const ink = Color(0xFFE6ECE8);
-    const mint = Color(0xFF1A2C24);
-    const line = Color(0xFF2C3933);
-    const surface = Color(0xFF171E1B);
+    const canvas = Color(0xFF07060F);
+    const ink = Color(0xFFE8E6F0);
+    const wash = Color(0xFF16132A);
+    const line = Color(0xFF2C2940);
+    const surface = Color(0xFF12101C);
 
     final colors =
         ColorScheme.fromSeed(
@@ -50,7 +57,7 @@ abstract final class AppTheme {
           brightness: Brightness.dark,
         ).copyWith(
           surface: surface,
-          surfaceContainerHighest: const Color(0xFF222B27),
+          surfaceContainerHighest: const Color(0xFF1C1830),
           primary: brandBright,
           onPrimary: Colors.white,
           secondary: const Color(0xFFD4784A),
@@ -62,10 +69,10 @@ abstract final class AppTheme {
       colors: colors,
       canvas: canvas,
       ink: ink,
-      mint: mint,
+      wash: wash,
       line: line,
       cardFill: surface,
-      inputFill: const Color(0xFF1C2420),
+      inputFill: const Color(0xFF181528),
       textBase: ThemeData.dark().textTheme,
     );
   }
@@ -74,7 +81,7 @@ abstract final class AppTheme {
     required ColorScheme colors,
     required Color canvas,
     required Color ink,
-    required Color mint,
+    required Color wash,
     required Color line,
     required Color cardFill,
     required Color inputFill,
@@ -137,7 +144,8 @@ abstract final class AppTheme {
         padding: EdgeInsets.symmetric(horizontal: 8),
       ),
       extensions: <ThemeExtension<dynamic>>[
-        RestaurantColors(mint: mint, ink: ink),
+        // `mint` remains the soft brand wash used by overview cards and badges.
+        RestaurantColors(mint: wash, ink: ink),
       ],
     );
   }
