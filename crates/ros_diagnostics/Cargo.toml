@@ -8,7 +8,7 @@ repository.workspace = true
 description = "Privacy-allowlisted local diagnostics for Gotigin Restaurant Operating System"
 
 [dependencies]
-serde = { version = "=1.0.228", features = ["derive"] }
+serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 sha2 = "=0.10.9"
 uuid = { version = "=1.24.0", features = ["v7"] }
