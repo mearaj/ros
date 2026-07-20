@@ -2406,82 +2406,86 @@ class _ProductTile extends StatelessWidget {
               key: ValueKey('pos-add-${product.productId}'),
               onTap: enabled ? onAdd : null,
               child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    height: 52,
-                    width: 52,
-                    child: MenuItemImage(
-                      assetKey: product.imageAssetKey,
-                      imageBytes: product.imageBytes,
-                      borderRadius: const BorderRadius.all(Radius.circular(12)),
-                      cacheWidth: 104,
-                      cacheHeight: 104,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    product.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if (hasModifiers)
-                    Text(
-                      'Customisable',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w700,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      height: 52,
+                      width: 52,
+                      child: MenuItemImage(
+                        assetKey: product.imageAssetKey,
+                        imageBytes: product.imageBytes,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(12),
+                        ),
+                        cacheWidth: 104,
+                        cacheHeight: 104,
                       ),
                     ),
-                  if (hasModifiers) const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          price,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
-                              ),
+                    const Spacer(),
+                    Text(
+                      product.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (hasModifiers)
+                      Text(
+                        'Customisable',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      DecoratedBox(
-                        decoration: ShapeDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.secondaryContainer,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(12)),
+                    if (hasModifiers) const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            price,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
                           ),
                         ),
-                        child: SizedBox(
-                          height: 40,
-                          width: 40,
-                          child: Icon(
-                            Icons.add,
+                        DecoratedBox(
+                          decoration: ShapeDecoration(
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSecondaryContainer,
+                            ).colorScheme.secondaryContainer,
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(12),
+                              ),
+                            ),
+                          ),
+                          child: SizedBox(
+                            height: 40,
+                            width: 40,
+                            child: Icon(
+                              Icons.add,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSecondaryContainer,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
       ),
     );
   }

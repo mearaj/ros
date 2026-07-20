@@ -112,41 +112,40 @@ void main() {
     expect(find.text('Your restaurant is ready for service.'), findsOne);
   });
 
-  testWidgets(
-    'guides first-time setup away from role-blaming POS denial',
-    (tester) async {
-      await tester.pumpWidget(
-        const RestaurantOperatingSystemApp(
-          coreStatus: 'Restaurant Operating System • Rust operational core',
-          workspace: CommunityWorkspace(
-            storageStatus: 'Saved locally • encrypted database ready',
-            setupRequired: true,
-            categories: [],
-            products: [],
-            customers: [],
-            openDrafts: [],
-            kitchenTickets: [],
-          ),
+  testWidgets('guides first-time setup away from role-blaming POS denial', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const RestaurantOperatingSystemApp(
+        coreStatus: 'Restaurant Operating System • Rust operational core',
+        workspace: CommunityWorkspace(
+          storageStatus: 'Saved locally • encrypted database ready',
+          setupRequired: true,
+          categories: [],
+          products: [],
+          customers: [],
+          openDrafts: [],
+          kitchenTickets: [],
         ),
-      );
+      ),
+    );
 
-      await tester.tap(find.text('POS'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('POS'));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.text(
-          'Finish restaurant setup in Menu before opening this workspace.',
-        ),
-        findsOne,
-      );
-      expect(
-        find.text('This workspace is not available to the active role.'),
-        findsNothing,
-      );
-      expect(find.text('Let’s set up your restaurant.'), findsNothing);
-      expect(find.text('Create your local restaurant workspace'), findsOne);
-    },
-  );
+    expect(
+      find.text(
+        'Finish restaurant setup in Menu before opening this workspace.',
+      ),
+      findsOne,
+    );
+    expect(
+      find.text('This workspace is not available to the active role.'),
+      findsNothing,
+    );
+    expect(find.text('Let’s set up your restaurant.'), findsNothing);
+    expect(find.text('Create your local restaurant workspace'), findsOne);
+  });
   testWidgets(
     'keeps overview metric cards within a narrow desktop viewport at large text',
     (tester) async {
@@ -518,13 +517,21 @@ void main() {
     expect(find.byKey(const Key('recover-passphrase')), findsOneWidget);
     expect(find.byKey(const Key('recover-owner-pin')), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('recover-passphrase')), 'too-short');
-    await tester.enterText(find.byKey(const Key('recover-owner-pin')), '123456');
+    await tester.enterText(
+      find.byKey(const Key('recover-passphrase')),
+      'too-short',
+    );
+    await tester.enterText(
+      find.byKey(const Key('recover-owner-pin')),
+      '123456',
+    );
     await tester.enterText(
       find.byKey(const Key('recover-owner-pin-confirm')),
       '123456',
     );
-    await tester.ensureVisible(find.byKey(const Key('submit-recover-owner-pin')));
+    await tester.ensureVisible(
+      find.byKey(const Key('submit-recover-owner-pin')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('submit-recover-owner-pin')));
     await tester.pump();

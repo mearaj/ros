@@ -105,9 +105,7 @@ abstract final class AppTheme {
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: Colors.transparent,
         selectedIconTheme: IconThemeData(color: colors.primary),
-        unselectedIconTheme: IconThemeData(
-          color: ink.withValues(alpha: 0.72),
-        ),
+        unselectedIconTheme: IconThemeData(color: ink.withValues(alpha: 0.72)),
         selectedLabelTextStyle: TextStyle(
           color: colors.primary,
           fontWeight: FontWeight.w700,

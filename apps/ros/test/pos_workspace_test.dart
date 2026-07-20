@@ -534,10 +534,7 @@ void main() {
 
     expect(find.byKey(const Key('pos-add-$_productId')), findsNothing);
     expect(find.text('No items are ready to sell yet'), findsOneWidget);
-    expect(
-      find.textContaining('Resume selling'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Resume selling'), findsOneWidget);
   });
 
   testWidgets('sends exact split-tender allocations to the trusted checkout', (

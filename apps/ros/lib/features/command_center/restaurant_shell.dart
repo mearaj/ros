@@ -43,6 +43,7 @@ class _RestaurantShellState extends State<RestaurantShell> {
   late CommunityWorkspace _workspace;
   CommunityStaffSecurity? _staffSecurity;
   CommunityRestaurantProfileRegistry? _profileRegistry;
+
   /// Lets Owner PIN onboarding return to edition/device-role without clearing
   /// a saved registry when the user only wants to revise first-run choices.
   var _revisitingFirstRunSetup = false;
@@ -89,8 +90,7 @@ class _RestaurantShellState extends State<RestaurantShell> {
       return _StaffSecurityGate(
         security: _staffSecurity ?? _unavailableStaffSecurity,
         isSaving: _isSaving,
-        canReturnToFirstRunSetup:
-            _staffSecurity?.ownerPinSetupRequired == true,
+        canReturnToFirstRunSetup: _staffSecurity?.ownerPinSetupRequired == true,
         onConfigureOwnerPin: _configureOwnerPin,
         onRecoverOwnerPin: _recoverOwnerPin,
         onUnlock: _unlockStaff,
@@ -380,7 +380,10 @@ class _RestaurantShellState extends State<RestaurantShell> {
     return registry;
   }
 
-  Future<void> _setEditionAndDeviceRole(String edition, String deviceRole) async {
+  Future<void> _setEditionAndDeviceRole(
+    String edition,
+    String deviceRole,
+  ) async {
     if (_isSaving || widget.applicationSupportDirectory.isEmpty) {
       return;
     }
@@ -1797,11 +1800,7 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
       body: SafeArea(
         child: Stack(
           children: [
-            const Positioned(
-              top: 8,
-              right: 8,
-              child: AppearanceMenuButton(),
-            ),
+            const Positioned(top: 8, right: 8, child: AppearanceMenuButton()),
             Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -1829,7 +1828,9 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
                                         ? Icons.key_outlined
                                         : Icons.lock_outline,
                                     size: 36,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                   ),
                                   const SizedBox(height: 18),
                                   Text(
@@ -1860,284 +1861,303 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
                                         ),
                                   ),
                                   const SizedBox(height: 22),
-                                  _SecurityStatus(status: security.storageStatus),
+                                  _SecurityStatus(
+                                    status: security.storageStatus,
+                                  ),
                                   const SizedBox(height: 20),
                                   if (setup) ...[
-                                _ObscurableTextFormField(
-                                  fieldKey: const Key('owner-pin'),
-                                  controller: _pinController,
-                                  enabled: !widget.isSaving,
-                                  autofocus: true,
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 12,
-                                  textInputAction: TextInputAction.next,
-                                  labelText: 'Owner PIN',
-                                  hintText: '6 to 12 digits',
-                                  prefixIcon: Icons.password_outlined,
-                                  validator: _pinValidator,
-                                ),
-                                const SizedBox(height: 12),
-                                _ObscurableTextFormField(
-                                  fieldKey: const Key('owner-pin-confirm'),
-                                  controller: _confirmPinController,
-                                  enabled: !widget.isSaving,
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 12,
-                                  textInputAction: TextInputAction.next,
-                                  labelText: 'Confirm owner PIN',
-                                  prefixIcon: Icons.password_outlined,
-                                  validator: (value) =>
-                                      value == _pinController.text
-                                      ? null
-                                      : 'PINs do not match',
-                                ),
-                                const SizedBox(height: 12),
-                                _ObscurableTextFormField(
-                                  fieldKey: const Key(
-                                    'owner-recovery-passphrase',
-                                  ),
-                                  controller: _passphraseController,
-                                  enabled: !widget.isSaving,
-                                  maxLength: 64,
-                                  textInputAction: TextInputAction.next,
-                                  labelText: 'Recovery passphrase',
-                                  hintText: '24 to 64 characters',
-                                  prefixIcon: Icons.vpn_key_outlined,
-                                  validator: _passphraseValidator,
-                                ),
-                                const SizedBox(height: 12),
-                                _ObscurableTextFormField(
-                                  fieldKey: const Key(
-                                    'owner-recovery-passphrase-confirm',
-                                  ),
-                                  controller: _confirmPassphraseController,
-                                  enabled: !widget.isSaving,
-                                  maxLength: 64,
-                                  textInputAction: TextInputAction.done,
-                                  onFieldSubmitted: (_) {
-                                    if (!widget.isSaving) {
-                                      unawaited(_submitPrimary());
-                                    }
-                                  },
-                                  labelText: 'Confirm recovery passphrase',
-                                  prefixIcon: Icons.vpn_key_outlined,
-                                  validator: (value) =>
-                                      value == _passphraseController.text
-                                      ? null
-                                      : 'Passphrases do not match',
-                                ),
-                              ] else if (recover) ...[
-                                _ObscurableTextFormField(
-                                  fieldKey: const Key('recover-passphrase'),
-                                  controller: _passphraseController,
-                                  enabled: !widget.isSaving,
-                                  autofocus: true,
-                                  maxLength: 64,
-                                  textInputAction: TextInputAction.next,
-                                  labelText: 'Recovery passphrase',
-                                  hintText: '24 to 64 characters',
-                                  prefixIcon: Icons.vpn_key_outlined,
-                                  validator: _passphraseValidator,
-                                ),
-                                const SizedBox(height: 12),
-                                _ObscurableTextFormField(
-                                  fieldKey: const Key('recover-owner-pin'),
-                                  controller: _pinController,
-                                  enabled: !widget.isSaving,
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 12,
-                                  textInputAction: TextInputAction.next,
-                                  labelText: 'New Owner PIN',
-                                  hintText: '6 to 12 digits',
-                                  prefixIcon: Icons.password_outlined,
-                                  validator: _pinValidator,
-                                ),
-                                const SizedBox(height: 12),
-                                _ObscurableTextFormField(
-                                  fieldKey: const Key(
-                                    'recover-owner-pin-confirm',
-                                  ),
-                                  controller: _confirmPinController,
-                                  enabled: !widget.isSaving,
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 12,
-                                  textInputAction: TextInputAction.done,
-                                  onFieldSubmitted: (_) {
-                                    if (!widget.isSaving) {
-                                      unawaited(_submitPrimary());
-                                    }
-                                  },
-                                  labelText: 'Confirm new Owner PIN',
-                                  prefixIcon: Icons.password_outlined,
-                                  validator: (value) =>
-                                      value == _pinController.text
-                                      ? null
-                                      : 'PINs do not match',
-                                ),
-                              ] else ...[
-                                DropdownButtonFormField<String>(
-                                  key: const Key('staff-selector'),
-                                  initialValue: _selectedStaffId,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Staff member',
-                                    prefixIcon: Icon(Icons.badge_outlined),
-                                  ),
-                                  onChanged: widget.isSaving
-                                      ? null
-                                      : (value) => setState(
-                                          () => _selectedStaffId = value,
-                                        ),
-                                  items: security.staff
-                                      .where(
-                                        (staff) =>
-                                            staff.active && staff.pinConfigured,
-                                      )
-                                      .map(
-                                        (staff) => DropdownMenuItem(
-                                          value: staff.staffId,
-                                          child: Text(
-                                            '${staff.displayName} • ${_roleLabel(staff.role)}',
-                                          ),
-                                        ),
-                                      )
-                                      .toList(growable: false),
-                                ),
-                                const SizedBox(height: 12),
-                                _ObscurableTextFormField(
-                                  fieldKey: const Key('staff-pin'),
-                                  controller: _pinController,
-                                  enabled:
-                                      !widget.isSaving &&
-                                      _selectedStaffId != null,
-                                  autofocus: true,
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 12,
-                                  textInputAction: TextInputAction.done,
-                                  onFieldSubmitted: (_) {
-                                    if (!widget.isSaving) {
-                                      unawaited(_submitPrimary());
-                                    }
-                                  },
-                                  labelText: 'PIN',
-                                  hintText: '6 to 12 digits',
-                                  prefixIcon: Icons.password_outlined,
-                                  validator: _pinValidator,
-                                ),
-                              ],
-                              const SizedBox(height: 24),
-                              if (setup && widget.canReturnToFirstRunSetup)
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: TextButton.icon(
-                                    key: const Key('back-to-first-run-setup'),
-                                    onPressed: widget.isSaving
-                                        ? null
-                                        : widget.onBackToFirstRunSetup,
-                                    icon: const Icon(Icons.arrow_back),
-                                    label: const Text('Back'),
-                                  ),
-                                ),
-                              if (setup && widget.canReturnToFirstRunSetup)
-                                const SizedBox(height: 8),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: FilledButton.icon(
-                                  key: Key(
-                                    setup
-                                        ? 'configure-owner-pin'
-                                        : recover
-                                        ? 'submit-recover-owner-pin'
-                                        : 'unlock-staff-session',
-                                  ),
-                                  onPressed: widget.isSaving
-                                      ? null
-                                      : () => unawaited(_submitPrimary()),
-                                  icon: widget.isSaving
-                                      ? const SizedBox(
-                                          height: 18,
-                                          width: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : Icon(
-                                          setup
-                                              ? Icons.security_outlined
-                                              : recover
-                                              ? Icons.lock_reset_outlined
-                                              : Icons.lock_open_outlined,
-                                        ),
-                                  label: Text(
-                                    widget.isSaving
-                                        ? 'Working securely…'
-                                        : setup
-                                        ? 'Secure this device'
-                                        : recover
-                                        ? 'Reset Owner PIN'
-                                        : 'Unlock',
-                                  ),
-                                ),
-                              ),
-                              if (!setup) ...[
-                                const SizedBox(height: 16),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 4,
-                                  children: [
-                                    if (!recover)
-                                      TextButton(
-                                        key: const Key('forgot-owner-pin'),
-                                        onPressed: widget.isSaving
-                                            ? null
-                                            : () => setState(() {
-                                                _mode = _StaffGateMode.recover;
-                                                _pinController.clear();
-                                                _confirmPinController.clear();
-                                                _passphraseController.clear();
-                                                _confirmPassphraseController
-                                                    .clear();
-                                              }),
-                                        child: const Text('Forgot Owner PIN'),
-                                      ),
-                                    if (recover)
-                                      TextButton.icon(
-                                        onPressed: widget.isSaving
-                                            ? null
-                                            : () => setState(() {
-                                                _mode = _StaffGateMode.unlock;
-                                                _pinController.clear();
-                                                _confirmPinController.clear();
-                                                _passphraseController.clear();
-                                                _confirmPassphraseController
-                                                    .clear();
-                                              }),
-                                        icon: const Icon(Icons.arrow_back),
-                                        label: const Text('Back to unlock'),
-                                      ),
-                                    TextButton(
-                                      key: const Key('restaurant-profiles'),
-                                      onPressed: widget.isSaving
-                                          ? null
-                                          : () => unawaited(
-                                              _showRestaurantProfiles(),
-                                            ),
-                                      child: const Text('Restaurant history'),
+                                    _ObscurableTextFormField(
+                                      fieldKey: const Key('owner-pin'),
+                                      controller: _pinController,
+                                      enabled: !widget.isSaving,
+                                      autofocus: true,
+                                      keyboardType: TextInputType.number,
+                                      maxLength: 12,
+                                      textInputAction: TextInputAction.next,
+                                      labelText: 'Owner PIN',
+                                      hintText: '6 to 12 digits',
+                                      prefixIcon: Icons.password_outlined,
+                                      validator: _pinValidator,
                                     ),
-                                    TextButton(
-                                      key: const Key('restore-portable-kit'),
-                                      onPressed: widget.isSaving
+                                    const SizedBox(height: 12),
+                                    _ObscurableTextFormField(
+                                      fieldKey: const Key('owner-pin-confirm'),
+                                      controller: _confirmPinController,
+                                      enabled: !widget.isSaving,
+                                      keyboardType: TextInputType.number,
+                                      maxLength: 12,
+                                      textInputAction: TextInputAction.next,
+                                      labelText: 'Confirm owner PIN',
+                                      prefixIcon: Icons.password_outlined,
+                                      validator: (value) =>
+                                          value == _pinController.text
                                           ? null
-                                          : () => unawaited(
-                                              _showRestorePortableDialog(),
+                                          : 'PINs do not match',
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _ObscurableTextFormField(
+                                      fieldKey: const Key(
+                                        'owner-recovery-passphrase',
+                                      ),
+                                      controller: _passphraseController,
+                                      enabled: !widget.isSaving,
+                                      maxLength: 64,
+                                      textInputAction: TextInputAction.next,
+                                      labelText: 'Recovery passphrase',
+                                      hintText: '24 to 64 characters',
+                                      prefixIcon: Icons.vpn_key_outlined,
+                                      validator: _passphraseValidator,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _ObscurableTextFormField(
+                                      fieldKey: const Key(
+                                        'owner-recovery-passphrase-confirm',
+                                      ),
+                                      controller: _confirmPassphraseController,
+                                      enabled: !widget.isSaving,
+                                      maxLength: 64,
+                                      textInputAction: TextInputAction.done,
+                                      onFieldSubmitted: (_) {
+                                        if (!widget.isSaving) {
+                                          unawaited(_submitPrimary());
+                                        }
+                                      },
+                                      labelText: 'Confirm recovery passphrase',
+                                      prefixIcon: Icons.vpn_key_outlined,
+                                      validator: (value) =>
+                                          value == _passphraseController.text
+                                          ? null
+                                          : 'Passphrases do not match',
+                                    ),
+                                  ] else if (recover) ...[
+                                    _ObscurableTextFormField(
+                                      fieldKey: const Key('recover-passphrase'),
+                                      controller: _passphraseController,
+                                      enabled: !widget.isSaving,
+                                      autofocus: true,
+                                      maxLength: 64,
+                                      textInputAction: TextInputAction.next,
+                                      labelText: 'Recovery passphrase',
+                                      hintText: '24 to 64 characters',
+                                      prefixIcon: Icons.vpn_key_outlined,
+                                      validator: _passphraseValidator,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _ObscurableTextFormField(
+                                      fieldKey: const Key('recover-owner-pin'),
+                                      controller: _pinController,
+                                      enabled: !widget.isSaving,
+                                      keyboardType: TextInputType.number,
+                                      maxLength: 12,
+                                      textInputAction: TextInputAction.next,
+                                      labelText: 'New Owner PIN',
+                                      hintText: '6 to 12 digits',
+                                      prefixIcon: Icons.password_outlined,
+                                      validator: _pinValidator,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _ObscurableTextFormField(
+                                      fieldKey: const Key(
+                                        'recover-owner-pin-confirm',
+                                      ),
+                                      controller: _confirmPinController,
+                                      enabled: !widget.isSaving,
+                                      keyboardType: TextInputType.number,
+                                      maxLength: 12,
+                                      textInputAction: TextInputAction.done,
+                                      onFieldSubmitted: (_) {
+                                        if (!widget.isSaving) {
+                                          unawaited(_submitPrimary());
+                                        }
+                                      },
+                                      labelText: 'Confirm new Owner PIN',
+                                      prefixIcon: Icons.password_outlined,
+                                      validator: (value) =>
+                                          value == _pinController.text
+                                          ? null
+                                          : 'PINs do not match',
+                                    ),
+                                  ] else ...[
+                                    DropdownButtonFormField<String>(
+                                      key: const Key('staff-selector'),
+                                      initialValue: _selectedStaffId,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Staff member',
+                                        prefixIcon: Icon(Icons.badge_outlined),
+                                      ),
+                                      onChanged: widget.isSaving
+                                          ? null
+                                          : (value) => setState(
+                                              () => _selectedStaffId = value,
                                             ),
-                                      child: const Text('Restore portable kit'),
+                                      items: security.staff
+                                          .where(
+                                            (staff) =>
+                                                staff.active &&
+                                                staff.pinConfigured,
+                                          )
+                                          .map(
+                                            (staff) => DropdownMenuItem(
+                                              value: staff.staffId,
+                                              child: Text(
+                                                '${staff.displayName} • ${_roleLabel(staff.role)}',
+                                              ),
+                                            ),
+                                          )
+                                          .toList(growable: false),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _ObscurableTextFormField(
+                                      fieldKey: const Key('staff-pin'),
+                                      controller: _pinController,
+                                      enabled:
+                                          !widget.isSaving &&
+                                          _selectedStaffId != null,
+                                      autofocus: true,
+                                      keyboardType: TextInputType.number,
+                                      maxLength: 12,
+                                      textInputAction: TextInputAction.done,
+                                      onFieldSubmitted: (_) {
+                                        if (!widget.isSaving) {
+                                          unawaited(_submitPrimary());
+                                        }
+                                      },
+                                      labelText: 'PIN',
+                                      hintText: '6 to 12 digits',
+                                      prefixIcon: Icons.password_outlined,
+                                      validator: _pinValidator,
                                     ),
                                   ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
+                                  const SizedBox(height: 24),
+                                  if (setup && widget.canReturnToFirstRunSetup)
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                        key: const Key(
+                                          'back-to-first-run-setup',
+                                        ),
+                                        onPressed: widget.isSaving
+                                            ? null
+                                            : widget.onBackToFirstRunSetup,
+                                        icon: const Icon(Icons.arrow_back),
+                                        label: const Text('Back'),
+                                      ),
+                                    ),
+                                  if (setup && widget.canReturnToFirstRunSetup)
+                                    const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: FilledButton.icon(
+                                      key: Key(
+                                        setup
+                                            ? 'configure-owner-pin'
+                                            : recover
+                                            ? 'submit-recover-owner-pin'
+                                            : 'unlock-staff-session',
+                                      ),
+                                      onPressed: widget.isSaving
+                                          ? null
+                                          : () => unawaited(_submitPrimary()),
+                                      icon: widget.isSaving
+                                          ? const SizedBox(
+                                              height: 18,
+                                              width: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : Icon(
+                                              setup
+                                                  ? Icons.security_outlined
+                                                  : recover
+                                                  ? Icons.lock_reset_outlined
+                                                  : Icons.lock_open_outlined,
+                                            ),
+                                      label: Text(
+                                        widget.isSaving
+                                            ? 'Working securely…'
+                                            : setup
+                                            ? 'Secure this device'
+                                            : recover
+                                            ? 'Reset Owner PIN'
+                                            : 'Unlock',
+                                      ),
+                                    ),
+                                  ),
+                                  if (!setup) ...[
+                                    const SizedBox(height: 16),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      children: [
+                                        if (!recover)
+                                          TextButton(
+                                            key: const Key('forgot-owner-pin'),
+                                            onPressed: widget.isSaving
+                                                ? null
+                                                : () => setState(() {
+                                                    _mode =
+                                                        _StaffGateMode.recover;
+                                                    _pinController.clear();
+                                                    _confirmPinController
+                                                        .clear();
+                                                    _passphraseController
+                                                        .clear();
+                                                    _confirmPassphraseController
+                                                        .clear();
+                                                  }),
+                                            child: const Text(
+                                              'Forgot Owner PIN',
+                                            ),
+                                          ),
+                                        if (recover)
+                                          TextButton.icon(
+                                            onPressed: widget.isSaving
+                                                ? null
+                                                : () => setState(() {
+                                                    _mode =
+                                                        _StaffGateMode.unlock;
+                                                    _pinController.clear();
+                                                    _confirmPinController
+                                                        .clear();
+                                                    _passphraseController
+                                                        .clear();
+                                                    _confirmPassphraseController
+                                                        .clear();
+                                                  }),
+                                            icon: const Icon(Icons.arrow_back),
+                                            label: const Text('Back to unlock'),
+                                          ),
+                                        TextButton(
+                                          key: const Key('restaurant-profiles'),
+                                          onPressed: widget.isSaving
+                                              ? null
+                                              : () => unawaited(
+                                                  _showRestaurantProfiles(),
+                                                ),
+                                          child: const Text(
+                                            'Restaurant history',
+                                          ),
+                                        ),
+                                        TextButton(
+                                          key: const Key(
+                                            'restore-portable-kit',
+                                          ),
+                                          onPressed: widget.isSaving
+                                              ? null
+                                              : () => unawaited(
+                                                  _showRestorePortableDialog(),
+                                                ),
+                                          child: const Text(
+                                            'Restore portable kit',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -2283,9 +2303,8 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(
-                dialogContext,
-              ).pop(labelController.text.trim()),
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(labelController.text.trim()),
               child: const Text('Start new'),
             ),
           ],
@@ -2458,11 +2477,7 @@ class _EditionDeviceRoleGateState extends State<_EditionDeviceRoleGate> {
       body: SafeArea(
         child: Stack(
           children: [
-            const Positioned(
-              top: 8,
-              right: 8,
-              child: AppearanceMenuButton(),
-            ),
+            const Positioned(top: 8, right: 8, child: AppearanceMenuButton()),
             Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -2558,51 +2573,55 @@ class _EditionDeviceRoleGateState extends State<_EditionDeviceRoleGate> {
                                   icon: const Icon(Icons.arrow_back),
                                   label: const Text('Back'),
                                 ),
-                          const Spacer(),
-                          FilledButton.icon(
-                            key: Key(
-                              choosingEdition
-                                  ? 'continue-edition-step'
-                                  : 'confirm-edition-device-role',
-                            ),
-                            onPressed: widget.isSaving
-                                ? null
-                                : () {
-                                    if (choosingEdition) {
-                                      setState(
-                                        () => _step = _FirstRunStep.deviceRole,
-                                      );
-                                      return;
-                                    }
-                                    unawaited(
-                                      widget.onContinue(_edition, _deviceRole),
-                                    );
-                                  },
-                            icon: widget.isSaving
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.arrow_forward),
-                            label: Text(
-                              widget.isSaving
-                                  ? 'Saving…'
-                                  : choosingEdition
-                                  ? 'Continue'
-                                  : 'Continue to security',
-                            ),
-                            ),
-                          ],
-                        ),
-                      ],
+                              const Spacer(),
+                              FilledButton.icon(
+                                key: Key(
+                                  choosingEdition
+                                      ? 'continue-edition-step'
+                                      : 'confirm-edition-device-role',
+                                ),
+                                onPressed: widget.isSaving
+                                    ? null
+                                    : () {
+                                        if (choosingEdition) {
+                                          setState(
+                                            () => _step =
+                                                _FirstRunStep.deviceRole,
+                                          );
+                                          return;
+                                        }
+                                        unawaited(
+                                          widget.onContinue(
+                                            _edition,
+                                            _deviceRole,
+                                          ),
+                                        );
+                                      },
+                                icon: widget.isSaving
+                                    ? const SizedBox(
+                                        height: 18,
+                                        width: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.arrow_forward),
+                                label: Text(
+                                  widget.isSaving
+                                      ? 'Saving…'
+                                      : choosingEdition
+                                      ? 'Continue'
+                                      : 'Continue to security',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
             ),
           ],
         ),
@@ -2824,9 +2843,7 @@ class _Sidebar extends StatelessWidget {
       width: 248,
       decoration: BoxDecoration(
         color: scheme.surface,
-        border: Border(
-          right: BorderSide(color: scheme.outlineVariant),
-        ),
+        border: Border(right: BorderSide(color: scheme.outlineVariant)),
       ),
       child: Column(
         children: [
@@ -3003,7 +3020,9 @@ class _TopBar extends StatelessWidget {
         const SizedBox(width: 8),
         CircleAvatar(
           radius: 19,
-          backgroundColor: Theme.of(context).extension<RestaurantColors>()!.mint,
+          backgroundColor: Theme.of(
+            context,
+          ).extension<RestaurantColors>()!.mint,
           child: Text(
             'P',
             style: TextStyle(
@@ -6356,71 +6375,73 @@ class _BuiltInImageChooser extends StatelessWidget {
                         : 2;
                     return InteractiveChrome(
                       child: GridView.builder(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        mainAxisExtent: 126,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                      itemCount: _builtInMenuImageOptions.length,
-                      itemBuilder: (context, index) {
-                        final option = _builtInMenuImageOptions[index];
-                        return Semantics(
-                          button: true,
-                          label: 'Use ${option.label} app photo',
-                          child: InkWell(
-                            onTap: () => Navigator.of(context).pop(option.key),
-                            borderRadius: const BorderRadius.all(
-                              Radius.circular(16),
-                            ),
-                            child: Ink(
-                              decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest,
-                                borderRadius: const BorderRadius.all(
-                                  Radius.circular(16),
-                                ),
-                                border: Border.all(
-                                  color: colorScheme.outlineVariant,
-                                ),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          mainAxisExtent: 126,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                        itemCount: _builtInMenuImageOptions.length,
+                        itemBuilder: (context, index) {
+                          final option = _builtInMenuImageOptions[index];
+                          return Semantics(
+                            button: true,
+                            label: 'Use ${option.label} app photo',
+                            child: InkWell(
+                              onTap: () =>
+                                  Navigator.of(context).pop(option.key),
+                              borderRadius: const BorderRadius.all(
+                                Radius.circular(16),
                               ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SizedBox(
-                                      height: 64,
-                                      width: double.infinity,
-                                      child: MenuItemImage(
-                                        assetKey: option.key,
-                                        fallbackIcon: option.icon,
-                                        borderRadius: const BorderRadius.all(
-                                          Radius.circular(8),
-                                        ),
-                                        cacheWidth: 192,
-                                        cacheHeight: 128,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    Text(
-                                      option.label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelLarge
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
+                              child: Ink(
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  borderRadius: const BorderRadius.all(
+                                    Radius.circular(16),
+                                  ),
+                                  border: Border.all(
+                                    color: colorScheme.outlineVariant,
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(
+                                        height: 64,
+                                        width: double.infinity,
+                                        child: MenuItemImage(
+                                          assetKey: option.key,
+                                          fallbackIcon: option.icon,
+                                          borderRadius: const BorderRadius.all(
+                                            Radius.circular(8),
                                           ),
-                                    ),
-                                  ],
+                                          cacheWidth: 192,
+                                          cacheHeight: 128,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        option.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
                     );
                   },
                 ),
@@ -6527,8 +6548,9 @@ class _CategoryImageSourceSheet extends StatelessWidget {
                       ),
                       title: const Text('Remove current image'),
                       subtitle: const Text('Keep the category and its history'),
-                      onTap: () =>
-                          Navigator.of(context).pop(_CategoryImageAction.remove),
+                      onTap: () => Navigator.of(
+                        context,
+                      ).pop(_CategoryImageAction.remove),
                     ),
                   ],
                 ],
@@ -6579,71 +6601,73 @@ class _BuiltInCategoryImageChooser extends StatelessWidget {
                         : 2;
                     return InteractiveChrome(
                       child: GridView.builder(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        mainAxisExtent: 142,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                      itemCount: _builtInCategoryImageOptions.length,
-                      itemBuilder: (context, index) {
-                        final option = _builtInCategoryImageOptions[index];
-                        return Semantics(
-                          button: true,
-                          label: 'Use ${option.label} category artwork',
-                          child: InkWell(
-                            onTap: () => Navigator.of(context).pop(option.key),
-                            borderRadius: const BorderRadius.all(
-                              Radius.circular(16),
-                            ),
-                            child: Ink(
-                              decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest,
-                                borderRadius: const BorderRadius.all(
-                                  Radius.circular(16),
-                                ),
-                                border: Border.all(
-                                  color: colorScheme.outlineVariant,
-                                ),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          mainAxisExtent: 142,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                        itemCount: _builtInCategoryImageOptions.length,
+                        itemBuilder: (context, index) {
+                          final option = _builtInCategoryImageOptions[index];
+                          return Semantics(
+                            button: true,
+                            label: 'Use ${option.label} category artwork',
+                            child: InkWell(
+                              onTap: () =>
+                                  Navigator.of(context).pop(option.key),
+                              borderRadius: const BorderRadius.all(
+                                Radius.circular(16),
                               ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SizedBox(
-                                      height: 78,
-                                      width: double.infinity,
-                                      child: CategoryImage(
-                                        assetKey: option.key,
-                                        fallbackIcon: option.icon,
-                                        borderRadius: const BorderRadius.all(
-                                          Radius.circular(8),
-                                        ),
-                                        cacheWidth: 192,
-                                        cacheHeight: 144,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    Text(
-                                      option.label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelLarge
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
+                              child: Ink(
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  borderRadius: const BorderRadius.all(
+                                    Radius.circular(16),
+                                  ),
+                                  border: Border.all(
+                                    color: colorScheme.outlineVariant,
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(
+                                        height: 78,
+                                        width: double.infinity,
+                                        child: CategoryImage(
+                                          assetKey: option.key,
+                                          fallbackIcon: option.icon,
+                                          borderRadius: const BorderRadius.all(
+                                            Radius.circular(8),
                                           ),
-                                    ),
-                                  ],
+                                          cacheWidth: 192,
+                                          cacheHeight: 144,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        option.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
                     );
                   },
                 ),
@@ -9928,9 +9952,9 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
       if (onChanged != null && registry.available) {
         await onChanged(registry);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(registry.storageStatus)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(registry.storageStatus)));
       }
     } finally {
       passphraseController.dispose();
@@ -10512,9 +10536,9 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
           children: [
             Text(
               'Local Sales Report',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
             Text(
@@ -10630,8 +10654,7 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                     title: 'Export verified financial CSV',
                     subtitle: 'Download the trusted local totals for this day',
                     busy: _isExportingFinancialCsv,
-                    onTap:
-                        !_canExportFinancialCsv || _isExportingFinancialCsv
+                    onTap: !_canExportFinancialCsv || _isExportingFinancialCsv
                         ? null
                         : _exportVerifiedFinancialCsv,
                   ),
@@ -10683,7 +10706,8 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                   _MoreActionTile(
                     icon: Icons.settings_backup_restore,
                     title: 'Restore verified backup',
-                    subtitle: 'Restore beside live data without overwriting quietly',
+                    subtitle:
+                        'Restore beside live data without overwriting quietly',
                     busy: _isRestoring,
                     onTap: !_canManageStaff || _isRestoring
                         ? null
@@ -10693,7 +10717,8 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                   _MoreActionTile(
                     icon: Icons.travel_explore_outlined,
                     title: 'Create portable recovery kit',
-                    subtitle: 'Export backup + passphrase envelope for a new device',
+                    subtitle:
+                        'Export backup + passphrase envelope for a new device',
                     busy: _isPortableBackingUp,
                     onTap: !_canManageStaff || _isPortableBackingUp
                         ? null
@@ -10703,7 +10728,8 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                   _MoreActionTile(
                     icon: Icons.unarchive_outlined,
                     title: 'Restore portable recovery kit',
-                    subtitle: 'Import into a new restaurant profile on this device',
+                    subtitle:
+                        'Import into a new restaurant profile on this device',
                     busy: _isPortableRestoring,
                     onTap: !_canManageStaff || _isPortableRestoring
                         ? null
@@ -10713,7 +10739,8 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                   _MoreActionTile(
                     icon: Icons.history_edu_outlined,
                     title: 'Restaurant history',
-                    subtitle: 'Open an old profile or start a new empty restaurant',
+                    subtitle:
+                        'Open an old profile or start a new empty restaurant',
                     onTap: !_canManageStaff ? null : _manageRestaurantProfiles,
                   ),
                 ],
@@ -10902,8 +10929,7 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                                     PopupMenuItem(
                                       value: 'refund',
                                       enabled:
-                                          _canManageFinancials &&
-                                          !_isRefunding,
+                                          _canManageFinancials && !_isRefunding,
                                       child: const Text('Record refund'),
                                     ),
                                     PopupMenuItem(
@@ -11397,9 +11423,7 @@ class _MoreActionTile extends StatelessWidget {
           : Icon(icon),
       title: Text(title),
       subtitle: Text(subtitle),
-      trailing: enabled
-          ? const Icon(Icons.chevron_right)
-          : null,
+      trailing: enabled ? const Icon(Icons.chevron_right) : null,
       onTap: enabled ? onTap : null,
     );
   }

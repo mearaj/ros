@@ -96,18 +96,9 @@ class AppearanceMenuButton extends StatelessWidget {
       initialValue: appearance.themeMode,
       onSelected: appearance.onThemeModeChanged,
       itemBuilder: (context) => const [
-        PopupMenuItem(
-          value: ThemeMode.light,
-          child: Text('Light'),
-        ),
-        PopupMenuItem(
-          value: ThemeMode.dark,
-          child: Text('Dark'),
-        ),
-        PopupMenuItem(
-          value: ThemeMode.system,
-          child: Text('System'),
-        ),
+        PopupMenuItem(value: ThemeMode.light, child: Text('Light')),
+        PopupMenuItem(value: ThemeMode.dark, child: Text('Dark')),
+        PopupMenuItem(value: ThemeMode.system, child: Text('System')),
       ],
       icon: Icon(_iconFor(appearance.themeMode)),
     );
