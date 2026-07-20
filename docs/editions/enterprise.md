@@ -21,6 +21,9 @@ sets a different authorized capacity.
 Enterprise uses the same local-first and safe-expiry principles:
 
 - Each branch continues normal local operation when offline.
+- Devices coordinate across the Gotigin cloud over WAN. Encrypted local caches
+  and durable outboxes support temporary outages; Community LAN Hub discovery,
+  pairing, hosting, and replication are disabled.
 - Cloud synchronization and organization-level controls are added capabilities,
   not prerequisites for local POS.
 - Annual expiry follows the Community Safe Mode path: no deletion, no loss of
@@ -55,4 +58,5 @@ roadmap work unless separately evidenced. A signed agreement cannot turn an
 unimplemented feature into a supported capability.
 
 See [the edition overview](README.md), [Professional Edition](professional.md),
-and [ADR 0009](../adr/0009-commercial-edition-terms.md).
+[ADR 0009](../adr/0009-commercial-edition-terms.md), and
+[ADR 0010](../adr/0010-edition-data-topology-and-switching.md).

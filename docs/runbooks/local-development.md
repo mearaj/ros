@@ -29,48 +29,25 @@ current `com.gotigin.ros.*.sqlcipher.v1` entries.
 
 Before the first public production release, use the repository-owned reset
 script when a developer needs a genuinely clean install rather than carrying
-development migrations forward. It is **destructive**, development-only, and
-never selects the production database or credential namespace.
-
-Close ROS first, then inspect the target:
-
-```bash
-python3 scripts/uninstall-local-ros.py --target desktop --dry-run
-```
-
-To remove the desktop Development database, its SQLite sidecars, its matching
-operating-system secure-store credential, its application-support directory,
-and the local Flutter debug bundle:
+development migrations forward. It is **destructive** and development-only: it
+clears this machine’s desktop Development databases, secure-store credentials,
+application-support directory (including the pre-rename
+`com.gotigin.restaurant_os` path when present), and the local Flutter debug
+bundle. It never selects the production database or credential namespace.
 
 ```bash
-python3 scripts/uninstall-local-ros.py --target desktop --yes
+bash scripts/uninstall-local-ros.sh
 ```
 
-The script refuses to run while the local `ros` process is open. Its Rust
-companion moves the encrypted database aside before it clears the credential;
-if secure-store deletion fails, it restores the database files. It never reads
-or prints a database key. Use `--keep-build` to preserve the debug bundle, or
-`--app-path /path/to/ros.app` to remove an explicitly supplied local desktop
-bundle as well.
-
-Mobile commands remove only an unpublished local install on the selected test
-target:
-
-```bash
-python3 scripts/uninstall-local-ros.py --target android --device <adb-serial> --yes
-python3 scripts/uninstall-local-ros.py --target ios-simulator --device <simulator-udid> --yes
-```
-
-`--erase-ios-simulator` additionally erases the entire selected simulator and
-is therefore never implicit. A physical iPhone/iPad is not offered as a
-"complete uninstall" target: iOS Keychain records can survive an app uninstall
-and require an app-owned recovery/reset design. This is especially important
-once the mobile secure-store adapter is introduced.
+The script stops a running `ros` process if needed, clears every local
+restaurant-profile database and matching development credential through the
+same Rust secure-store adapter the app uses, then deletes the support
+directory. Keep any test backup needed for validation outside the
+application-support directory before running it.
 
 This reset is for unpublished development only. It is not a replacement for a
 customer backup, restore, ownership-recovery, update, or release-uninstall
-path. Keep any test backup needed for validation outside the application-
-support directory before running it.
+path.
 
 ## Prerequisites
 
@@ -137,7 +114,7 @@ keys, or operating-system credential-store details. Use this Stage 1 smoke test:
 4. Create the six-to-twelve-digit **Owner PIN** when prompted. Confirm the
    app unlocks as Owner; use the floating lock action and unlock again before
    continuing. The local session expires after 15 minutes.
-5. While unlocked as Owner, open **Reports** and use **Manage local staff** to
+5. While unlocked as Owner, open **More** and use **Manage local staff** to
    add test Manager, Cashier, and Kitchen accounts with distinct PINs. Lock and
    unlock as each account. Confirm Manager can manage Menu, counter, Kitchen,
    and accountable operations; Cashier can operate the counter but cannot
@@ -163,7 +140,7 @@ keys, or operating-system credential-store details. Use this Stage 1 smoke test:
    sync-outbox entries.
 10. Quit and relaunch the app. The existing restaurant, menu, selected image,
    invoice, and payment must be available without repeating setup. In
-   **Reports**, open the recent invoice to confirm that its receipt reprint
+   **More**, open the recent invoice to confirm that its receipt reprint
    comes from immutable historical line, modifier, and payment snapshots.
 11. In **Menu**, open the item's action menu and choose **Remove from active
    menu**. Enter a reason and archive it. Confirm it disappears from the active
@@ -257,7 +234,7 @@ Allow-listed technical events are written under the application-support
 include bootstrap, staff unlock/lock, owner PIN configure, sale preview/complete,
 refund, void, day close, backup create/verify/restore, and storage integrity,
 plus UI navigation/action breadcrumbs. Owners can open **Local
-diagnostics** from Reports to export a redacted pack or voluntarily share it
+diagnostics** from More to export a redacted pack or voluntarily share it
 after consent. Cloud upload requires building with:
 
 ```bash

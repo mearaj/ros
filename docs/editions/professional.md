@@ -7,6 +7,11 @@ multiple branches and cloud coordination while retaining local, offline
 restaurant operation. It is an entitlement upgrade to a Community installation;
 it must not require reinstalling or discarding local data.
 
+Professional devices coordinate through the Gotigin cloud over WAN. They keep
+encrypted local caches and durable outboxes for temporary internet outages, but
+do not discover, host, pair with, or replicate through a Community LAN Hub.
+This is one mode of the same ROS app, not a separate application.
+
 Professional is planned and release-gated. Community acceptance is the current
 delivery priority; Professional Evaluation work begins only after the
 Community-first delivery contract is satisfied. Until its cloud deployment,
@@ -55,11 +60,20 @@ deleting data.
   local access to its data.
 - A Community-to-Professional upgrade creates a verified pre-sync backup,
   establishes organization/branch/device identity, uploads a resumable
-  baseline, and retains recovery/rollback behavior.
+  baseline, verifies it, revokes LAN write authority, and only then enables
+  cloud writes.
+- The Owner may deliberately return to Community without reinstalling. The
+  Owner selects one branch and a supported Branch Hub; all known cloud outboxes
+  are reconciled, a verified snapshot is restored to the Hub, and cloud write
+  authority is revoked before LAN writes begin. Other branches remain read-only
+  and exportable and are never merged into the selected Community branch.
 - Financial records remain append-only. Sync never replaces one database file
   with another and never resolves financial conflicts by last-write-wins.
 - Entitlement expiry affects cloud and multi-branch coordination, not data
   ownership or export access.
+- Expiry Safe Mode is not an unsafe automatic LAN conversion. During a WAN
+  outage, retained outboxes remain durable; LAN pairing starts only after the
+  selected branch has reconciled and completed a verified topology cutover.
 
 ## Release boundary
 
@@ -71,5 +85,7 @@ entitlements, trial activation/expiry, safe renewal, backup/restore, sync
 failure/retry, multi-branch reporting, device revocation, and production
 operational support.
 
-See [the edition overview](README.md), [ADR 0009](../adr/0009-commercial-edition-terms.md),
-and the [Professional sync contract](../runbooks/professional-sync-contract.md).
+See [the edition overview](README.md),
+[ADR 0009](../adr/0009-commercial-edition-terms.md),
+[ADR 0010](../adr/0010-edition-data-topology-and-switching.md), and the
+[Professional sync contract](../runbooks/professional-sync-contract.md).

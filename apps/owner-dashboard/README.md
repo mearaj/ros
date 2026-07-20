@@ -10,7 +10,7 @@ Minimal Stage 4/5 owner dashboard for Restaurant Operating System Professional.
 
 ```bash
 cd apps/owner-dashboard
-python3 -m http.server 8080
+npx --yes http-server . --port 8080
 ```
 
 3. Open `http://127.0.0.1:8080` and point the API base URL at the Professional

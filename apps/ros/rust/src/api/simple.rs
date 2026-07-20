@@ -182,6 +182,33 @@ pub struct CommunityBackupResult {
     pub sha256: Option<String>,
 }
 
+#[derive(Clone)]
+pub struct CommunityPortableBackupResult {
+    pub storage_status: String,
+    pub created: bool,
+    pub backup_file_name: Option<String>,
+    pub envelope_file_name: Option<String>,
+    pub sha256: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct CommunityRestaurantProfileView {
+    pub profile_id: String,
+    pub label: String,
+    pub created_at_utc: String,
+    pub is_active: bool,
+}
+
+#[derive(Clone)]
+pub struct CommunityRestaurantProfileRegistry {
+    pub storage_status: String,
+    pub available: bool,
+    pub edition: Option<String>,
+    pub device_role: Option<String>,
+    pub active_profile_id: Option<String>,
+    pub profiles: Vec<CommunityRestaurantProfileView>,
+}
+
 /// Owner-facing, privacy-allowlisted diagnostic event for local troubleshooting.
 #[derive(Clone)]
 pub struct CommunityDiagnosticEventView {
@@ -560,11 +587,13 @@ pub fn load_community_staff_security(
     }
 }
 
-/// Sets the owner PIN once, then creates the first short-lived owner session
-/// so onboarding can continue without a second plaintext PIN prompt.
+/// Sets the owner PIN once with a recovery passphrase, then creates the first
+/// short-lived owner session so onboarding can continue without a second
+/// plaintext PIN prompt.
 pub fn configure_community_owner_pin(
     application_support_directory: String,
     pin: String,
+    recovery_passphrase: String,
 ) -> CommunityStaffSecurity {
     let started = std::time::Instant::now();
     let database = match open_community_database(&application_support_directory) {
@@ -597,7 +626,9 @@ pub fn configure_community_owner_pin(
             );
         }
     };
-    if database.set_initial_owner_pin(&pin).is_err()
+    if database
+        .set_initial_owner_pin_with_recovery_passphrase(&pin, &recovery_passphrase)
+        .is_err()
         || database
             .unlock_local_staff(owner_context.actor_id(), &pin)
             .is_err()
@@ -611,7 +642,7 @@ pub fn configure_community_owner_pin(
             Some("credential_rejected"),
         );
         return unavailable_staff_security(
-            "Staff security needs attention • choose a six to twelve digit owner PIN".to_owned(),
+            "Staff security needs attention • choose a six to twelve digit owner PIN and a 24 to 64 character recovery passphrase".to_owned(),
         );
     }
     record_diagnostic(
@@ -623,6 +654,97 @@ pub fn configure_community_owner_pin(
         None,
     );
     load_community_staff_security(application_support_directory)
+}
+
+pub fn recover_community_owner_pin(
+    application_support_directory: String,
+    recovery_passphrase: String,
+    new_owner_pin: String,
+) -> CommunityStaffSecurity {
+    let started = std::time::Instant::now();
+    let database = match open_community_database(&application_support_directory) {
+        Ok(database) => database,
+        Err(status) => {
+            record_diagnostic(
+                &application_support_directory,
+                "owner_pin_recover",
+                ros_diagnostics::DiagnosticComponent::Bridge,
+                ros_diagnostics::DiagnosticOutcome::Failed,
+                Some(started.elapsed().as_millis() as u64),
+                Some("storage_unavailable"),
+            );
+            return unavailable_staff_security(status);
+        }
+    };
+    match database
+        .recover_owner_pin_with_recovery_passphrase(&recovery_passphrase, &new_owner_pin)
+    {
+        Ok(()) => {
+            record_diagnostic(
+                &application_support_directory,
+                "owner_pin_recover",
+                ros_diagnostics::DiagnosticComponent::Bridge,
+                ros_diagnostics::DiagnosticOutcome::Ok,
+                Some(started.elapsed().as_millis() as u64),
+                None,
+            );
+            let owner_id = match database.community_owner_context() {
+                Ok(context) => context.actor_id().clone(),
+                Err(_) => {
+                    return unavailable_staff_security(
+                        "Owner PIN was reset • unlock with the new PIN".to_owned(),
+                    );
+                }
+            };
+            let _ = database.unlock_local_staff(&owner_id, &new_owner_pin);
+            load_community_staff_security(application_support_directory)
+        }
+        Err(ros_storage::StorageError::StaffPinTemporarilyLocked) => {
+            record_diagnostic(
+                &application_support_directory,
+                "owner_pin_recover",
+                ros_diagnostics::DiagnosticComponent::Bridge,
+                ros_diagnostics::DiagnosticOutcome::Denied,
+                Some(started.elapsed().as_millis() as u64),
+                Some("throttled"),
+            );
+            let mut security = load_community_staff_security(application_support_directory);
+            security.storage_status =
+                "Owner PIN recovery needs attention • too many failed attempts — wait and try again"
+                    .to_owned();
+            security
+        }
+        Err(ros_storage::StorageError::InvalidStaffPin) => {
+            record_diagnostic(
+                &application_support_directory,
+                "owner_pin_recover",
+                ros_diagnostics::DiagnosticComponent::Bridge,
+                ros_diagnostics::DiagnosticOutcome::Denied,
+                Some(started.elapsed().as_millis() as u64),
+                Some("credential_rejected"),
+            );
+            let mut security = load_community_staff_security(application_support_directory);
+            security.storage_status =
+                "Owner PIN recovery needs attention • the recovery passphrase could not be verified"
+                    .to_owned();
+            security
+        }
+        Err(_) => {
+            record_diagnostic(
+                &application_support_directory,
+                "owner_pin_recover",
+                ros_diagnostics::DiagnosticComponent::Bridge,
+                ros_diagnostics::DiagnosticOutcome::Failed,
+                Some(started.elapsed().as_millis() as u64),
+                Some("recovery_unavailable"),
+            );
+            let mut security = load_community_staff_security(application_support_directory);
+            security.storage_status =
+                "Owner PIN recovery needs attention • create a recovery passphrase during Owner setup first"
+                    .to_owned();
+            security
+        }
+    }
 }
 
 pub fn unlock_community_staff(
@@ -2288,6 +2410,348 @@ pub fn refund_community_invoice(
     }
 }
 
+pub fn create_community_portable_backup(
+    application_support_directory: String,
+    recovery_passphrase: String,
+) -> CommunityPortableBackupResult {
+    let started = std::time::Instant::now();
+    let database = match open_community_database(&application_support_directory) {
+        Ok(database) => database,
+        Err(status) => {
+            record_diagnostic(
+                &application_support_directory,
+                "portable_backup_create",
+                ros_diagnostics::DiagnosticComponent::Bridge,
+                ros_diagnostics::DiagnosticOutcome::Failed,
+                Some(started.elapsed().as_millis() as u64),
+                Some("storage_unavailable"),
+            );
+            return CommunityPortableBackupResult {
+                storage_status: status,
+                created: false,
+                backup_file_name: None,
+                envelope_file_name: None,
+                sha256: None,
+            };
+        }
+    };
+    let context = match database.community_active_staff_context() {
+        Ok(context) => context,
+        Err(_) => {
+            return CommunityPortableBackupResult {
+                storage_status:
+                    "Portable backup needs attention • unlock the owner session first".to_owned(),
+                created: false,
+                backup_file_name: None,
+                envelope_file_name: None,
+                sha256: None,
+            };
+        }
+    };
+    if context.actor_role() != ros_core::ActorRole::Owner {
+        return CommunityPortableBackupResult {
+            storage_status:
+                "Portable backup needs attention • only the active owner may create a recovery kit"
+                    .to_owned(),
+            created: false,
+            backup_file_name: None,
+            envelope_file_name: None,
+            sha256: None,
+        };
+    }
+    let id = ros_core::EntityId::new_v7();
+    let backup_name = format!("restaurant-os-portable-{id}.db");
+    let envelope_name = format!("restaurant-os-portable-{id}.rosrecovery");
+    let kit_dir = PathBuf::from(&application_support_directory).join("portable-backups");
+    if std::fs::create_dir_all(&kit_dir).is_err() {
+        return CommunityPortableBackupResult {
+            storage_status:
+                "Portable backup needs attention • recovery kit directory is unavailable".to_owned(),
+            created: false,
+            backup_file_name: None,
+            envelope_file_name: None,
+            sha256: None,
+        };
+    }
+    let backup_path = kit_dir.join(&backup_name);
+    let envelope_path = kit_dir.join(&envelope_name);
+    match database.create_portable_backup_with_envelope(
+        &backup_path,
+        &envelope_path,
+        &recovery_passphrase,
+        &context,
+    ) {
+        Ok((backup, _)) => {
+            record_diagnostic(
+                &application_support_directory,
+                "portable_backup_create",
+                ros_diagnostics::DiagnosticComponent::Bridge,
+                ros_diagnostics::DiagnosticOutcome::Ok,
+                Some(started.elapsed().as_millis() as u64),
+                None,
+            );
+            CommunityPortableBackupResult {
+                storage_status: format!(
+                    "Verified portable recovery kit created • schema v{} • copy both files outside this device",
+                    backup.schema_version()
+                ),
+                created: true,
+                backup_file_name: Some(backup_name),
+                envelope_file_name: Some(envelope_name),
+                sha256: Some(backup.sha256().to_owned()),
+            }
+        }
+        Err(_) => CommunityPortableBackupResult {
+            storage_status:
+                "Portable backup needs attention • use a 24 to 64 character recovery passphrase"
+                    .to_owned(),
+            created: false,
+            backup_file_name: None,
+            envelope_file_name: None,
+            sha256: None,
+        },
+    }
+}
+
+pub fn restore_community_portable_backup(
+    application_support_directory: String,
+    backup_file_path: String,
+    envelope_file_path: String,
+    recovery_passphrase: String,
+    profile_label: String,
+) -> CommunityRestaurantProfileRegistry {
+    let started = std::time::Instant::now();
+    let envelope_json = match std::fs::read_to_string(&envelope_file_path) {
+        Ok(json) => json,
+        Err(_) => {
+            return unavailable_profile_registry(
+                "Portable restore needs attention • the recovery envelope file could not be read"
+                    .to_owned(),
+            );
+        }
+    };
+    let profile_id = ros_core::EntityId::new_v7().to_string();
+    let destination =
+        community_database_path(&application_support_directory, &profile_id);
+    if let Some(parent) = destination.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let restored = match ros_storage::LocalDatabase::restore_portable_backup_to_clean_path(
+        &backup_file_path,
+        &envelope_json,
+        &recovery_passphrase,
+        &destination,
+    ) {
+        Ok(result) => result,
+        Err(_) => {
+            record_diagnostic(
+                &application_support_directory,
+                "portable_backup_restore",
+                ros_diagnostics::DiagnosticComponent::Bridge,
+                ros_diagnostics::DiagnosticOutcome::Failed,
+                Some(started.elapsed().as_millis() as u64),
+                Some("restore_failed"),
+            );
+            return unavailable_profile_registry(
+                "Portable restore needs attention • verify the backup, envelope, and passphrase"
+                    .to_owned(),
+            );
+        }
+    };
+    if ros_storage::install_unwrapped_key_and_open_database_for_profile(
+        &destination,
+        &profile_id,
+        restored.1,
+    )
+    .is_err()
+    {
+        let _ = std::fs::remove_file(&destination);
+        return unavailable_profile_registry(
+            "Portable restore needs attention • the restored key could not be stored securely"
+                .to_owned(),
+        );
+    }
+    let mut registry = match load_or_migrate_profile_registry(&application_support_directory) {
+        Ok(registry) => registry,
+        Err(status) => return unavailable_profile_registry(status),
+    };
+    let label = {
+        let trimmed = profile_label.trim();
+        if trimmed.is_empty() {
+            "Restored restaurant".to_owned()
+        } else {
+            trimmed.to_owned()
+        }
+    };
+    registry.profiles.push(ProfileRegistryEntry {
+        profile_id: profile_id.clone(),
+        label,
+        created_at_utc: chrono_like_utc_now(),
+    });
+    registry.active_profile_id = profile_id;
+    if save_profile_registry(&application_support_directory, &registry).is_err() {
+        return unavailable_profile_registry(
+            "Portable restore needs attention • the restaurant profile list could not be updated"
+                .to_owned(),
+        );
+    }
+    record_diagnostic(
+        &application_support_directory,
+        "portable_backup_restore",
+        ros_diagnostics::DiagnosticComponent::Bridge,
+        ros_diagnostics::DiagnosticOutcome::Ok,
+        Some(started.elapsed().as_millis() as u64),
+        None,
+    );
+    list_community_restaurant_profiles(application_support_directory)
+}
+
+pub fn list_community_restaurant_profiles(
+    application_support_directory: String,
+) -> CommunityRestaurantProfileRegistry {
+    match load_or_migrate_profile_registry(&application_support_directory) {
+        Ok(registry) => CommunityRestaurantProfileRegistry {
+            storage_status: "Restaurant profiles ready".to_owned(),
+            available: true,
+            edition: registry.edition.clone(),
+            device_role: registry.device_role.clone(),
+            active_profile_id: Some(registry.active_profile_id.clone()),
+            profiles: registry
+                .profiles
+                .into_iter()
+                .map(|profile| CommunityRestaurantProfileView {
+                    is_active: profile.profile_id == registry.active_profile_id,
+                    profile_id: profile.profile_id,
+                    label: profile.label,
+                    created_at_utc: profile.created_at_utc,
+                })
+                .collect(),
+        },
+        Err(status) => unavailable_profile_registry(status),
+    }
+}
+
+pub fn set_community_edition_and_device_role(
+    application_support_directory: String,
+    edition: String,
+    device_role: String,
+) -> CommunityRestaurantProfileRegistry {
+    let mut registry = match load_or_migrate_profile_registry(&application_support_directory) {
+        Ok(registry) => registry,
+        Err(status) => return unavailable_profile_registry(status),
+    };
+    let edition = edition.trim().to_ascii_lowercase();
+    let device_role = device_role.trim().to_ascii_lowercase();
+    if !matches!(edition.as_str(), "community" | "paid") {
+        return unavailable_profile_registry(
+            "Setup needs attention • choose Community or Paid edition".to_owned(),
+        );
+    }
+    if !matches!(device_role.as_str(), "hub" | "client") {
+        return unavailable_profile_registry(
+            "Setup needs attention • choose Hub or Client for this device".to_owned(),
+        );
+    }
+    registry.edition = Some(edition);
+    registry.device_role = Some(device_role);
+    if save_profile_registry(&application_support_directory, &registry).is_err() {
+        return unavailable_profile_registry(
+            "Setup needs attention • edition choice could not be saved".to_owned(),
+        );
+    }
+    list_community_restaurant_profiles(application_support_directory)
+}
+
+pub fn start_new_community_restaurant_profile(
+    application_support_directory: String,
+    label: String,
+) -> CommunityRestaurantProfileRegistry {
+    let mut registry = match load_or_migrate_profile_registry(&application_support_directory) {
+        Ok(registry) => registry,
+        Err(status) => return unavailable_profile_registry(status),
+    };
+    let profile_id = ros_core::EntityId::new_v7().to_string();
+    let database_path = community_database_path(&application_support_directory, &profile_id);
+    if let Some(parent) = database_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if ros_storage::open_or_create_platform_database_for_profile(&database_path, &profile_id)
+        .is_err()
+    {
+        return unavailable_profile_registry(
+            "Start new restaurant needs attention • a new secure database could not be created"
+                .to_owned(),
+        );
+    }
+    let label = {
+        let trimmed = label.trim();
+        if trimmed.is_empty() {
+            "New restaurant".to_owned()
+        } else {
+            trimmed.to_owned()
+        }
+    };
+    registry.profiles.push(ProfileRegistryEntry {
+        profile_id: profile_id.clone(),
+        label,
+        created_at_utc: chrono_like_utc_now(),
+    });
+    registry.active_profile_id = profile_id;
+    if save_profile_registry(&application_support_directory, &registry).is_err() {
+        return unavailable_profile_registry(
+            "Start new restaurant needs attention • the profile list could not be updated"
+                .to_owned(),
+        );
+    }
+    list_community_restaurant_profiles(application_support_directory)
+}
+
+pub fn activate_community_restaurant_profile(
+    application_support_directory: String,
+    profile_id: String,
+) -> CommunityRestaurantProfileRegistry {
+    let mut registry = match load_or_migrate_profile_registry(&application_support_directory) {
+        Ok(registry) => registry,
+        Err(status) => return unavailable_profile_registry(status),
+    };
+    if !registry
+        .profiles
+        .iter()
+        .any(|profile| profile.profile_id == profile_id)
+    {
+        return unavailable_profile_registry(
+            "Restaurant profile needs attention • that restaurant is not on this device".to_owned(),
+        );
+    }
+    let database_path = community_database_path(&application_support_directory, &profile_id);
+    if ros_storage::open_or_create_platform_database_for_profile(&database_path, &profile_id)
+        .is_err()
+    {
+        return unavailable_profile_registry(
+            "Restaurant profile needs attention • that restaurant could not be opened".to_owned(),
+        );
+    }
+    registry.active_profile_id = profile_id;
+    if save_profile_registry(&application_support_directory, &registry).is_err() {
+        return unavailable_profile_registry(
+            "Restaurant profile needs attention • the active restaurant could not be saved"
+                .to_owned(),
+        );
+    }
+    list_community_restaurant_profiles(application_support_directory)
+}
+
+fn unavailable_profile_registry(status: String) -> CommunityRestaurantProfileRegistry {
+    CommunityRestaurantProfileRegistry {
+        storage_status: status,
+        available: false,
+        edition: None,
+        device_role: None,
+        active_profile_id: None,
+        profiles: Vec::new(),
+    }
+}
+
 pub fn create_community_local_backup(
     application_support_directory: String,
 ) -> CommunityBackupResult {
@@ -3133,58 +3597,89 @@ pub fn create_community_category(
     }
 }
 
-/// Imports an editable Indian restaurant starter menu. Every item is imported
-/// disabled at a zero price so the owner must review local pricing and
-/// availability before it can appear at the counter.
-pub fn import_common_starter_menu(application_support_directory: String) -> CommunityWorkspace {
-    const STARTER_MENU: &[(&str, &[&str])] = &[
-        (
-            "Beverages",
-            &[
-                "Masala chai",
-                "Filter coffee",
-                "Fresh lime soda",
-                "Mango lassi",
-            ],
-        ),
-        (
-            "Breakfast",
-            &["Idli sambar", "Masala dosa", "Plain dosa", "Vegetable upma"],
-        ),
-        (
-            "Snacks & Starters",
-            &[
-                "Vegetable samosa",
-                "Paneer tikka",
-                "French fries",
-                "Veg spring rolls",
-            ],
-        ),
-        (
-            "Main Course",
-            &[
-                "Paneer butter masala",
-                "Dal tadka",
-                "Veg kadai",
-                "Chicken curry",
-            ],
-        ),
-        ("Breads", &["Tandoori roti", "Butter naan", "Garlic naan"]),
-        (
-            "Rice & Biryani",
-            &[
-                "Veg biryani",
-                "Chicken biryani",
-                "Jeera rice",
-                "Veg fried rice",
-            ],
-        ),
-        (
-            "Desserts",
-            &["Gulab jamun", "Ice cream", "Brownie with ice cream"],
-        ),
-    ];
+/// A starter item name paired with its built-in dish photo key.
+type StarterMenuItem = (&'static str, &'static str);
+/// A starter category name, its category artwork key, and its items.
+type StarterMenuCategory = (&'static str, &'static str, &'static [StarterMenuItem]);
 
+// Every starter category carries its distinct app category artwork, and every
+// starter item carries a matching built-in dish photo, so an imported menu is
+// visually complete instead of a wall of identical placeholder icons.
+const STARTER_MENU: &[StarterMenuCategory] = &[
+    (
+        "Beverages",
+        "category_beverages",
+        &[
+            ("Masala chai", "chai"),
+            ("Filter coffee", "coffee"),
+            ("Fresh lime soda", "lime_soda"),
+            ("Mango lassi", "lassi"),
+        ],
+    ),
+    (
+        "Breakfast",
+        "category_breakfast",
+        &[
+            ("Idli sambar", "idli"),
+            ("Masala dosa", "dosa"),
+            ("Plain dosa", "dosa"),
+            ("Vegetable upma", "upma"),
+        ],
+    ),
+    (
+        "Snacks & Starters",
+        "category_starters",
+        &[
+            ("Vegetable samosa", "samosa"),
+            ("Paneer tikka", "paneer_tikka"),
+            ("French fries", "fries"),
+            ("Veg spring rolls", "spring_rolls"),
+        ],
+    ),
+    (
+        "Main Course",
+        "category_mains",
+        &[
+            ("Paneer butter masala", "curry"),
+            ("Dal tadka", "dal"),
+            ("Veg kadai", "curry"),
+            ("Chicken curry", "curry"),
+        ],
+    ),
+    (
+        "Breads",
+        "category_breads",
+        &[
+            ("Tandoori roti", "roti"),
+            ("Butter naan", "naan"),
+            ("Garlic naan", "naan"),
+        ],
+    ),
+    (
+        "Rice & Biryani",
+        "category_rice",
+        &[
+            ("Veg biryani", "biryani"),
+            ("Chicken biryani", "biryani"),
+            ("Jeera rice", "rice"),
+            ("Veg fried rice", "fried_rice"),
+        ],
+    ),
+    (
+        "Desserts",
+        "category_desserts",
+        &[
+            ("Gulab jamun", "gulab_jamun"),
+            ("Ice cream", "ice_cream"),
+            ("Brownie with ice cream", "brownie"),
+        ],
+    ),
+];
+
+/// Imports an editable Indian restaurant starter menu. Every item is imported
+/// available at a one-unit placeholder price (₹1.00 / 100 minor units) so the
+/// owner can try POS immediately, then replace prices when ready.
+pub fn import_common_starter_menu(application_support_directory: String) -> CommunityWorkspace {
     let database = match open_community_database(&application_support_directory) {
         Ok(database) => database,
         Err(status) => return unavailable_workspace(status),
@@ -3225,6 +3720,30 @@ pub fn import_common_starter_menu(application_support_directory: String) -> Comm
             );
         }
     };
+    let category_images_present = match database.list_category_images(branch.branch_id()) {
+        Ok(images) => images
+            .into_iter()
+            .map(|image| image.category_id().to_string())
+            .collect::<std::collections::HashSet<_>>(),
+        Err(_) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Could not check your current category images. Try importing again.".to_owned(),
+            );
+        }
+    };
+    let product_images_present = match database.list_catalog_product_images(branch.branch_id()) {
+        Ok(images) => images
+            .into_iter()
+            .map(|image| image.product_id().to_string())
+            .collect::<std::collections::HashSet<_>>(),
+        Err(_) => {
+            return workspace_with_error(
+                &application_support_directory,
+                "Could not check your current menu images. Try importing again.".to_owned(),
+            );
+        }
+    };
     let mut category_ids = existing_categories
         .into_iter()
         .map(|category| {
@@ -3234,7 +3753,7 @@ pub fn import_common_starter_menu(application_support_directory: String) -> Comm
             )
         })
         .collect::<std::collections::HashMap<_, _>>();
-    let mut product_names = existing_products
+    let mut products_by_key = existing_products
         .into_iter()
         .map(|product| {
             (
@@ -3242,22 +3761,42 @@ pub fn import_common_starter_menu(application_support_directory: String) -> Comm
                     product.category_id().map(ToString::to_string),
                     product.display_name().display().to_lowercase(),
                 ),
-                (),
+                product,
             )
         })
         .collect::<std::collections::HashMap<_, _>>();
-    let review_reason =
-        match ros_core::MutationReason::new("Starter menu imported; owner price review required") {
-            Ok(reason) => reason,
-            Err(_) => unreachable!("literal starter-menu reason is valid"),
-        };
+    let mut category_images_present = category_images_present;
+    let mut product_images_present = product_images_present;
 
     let mut added_category_count = 0;
     let mut added_item_count = 0;
-    for (category_position, (category_name, items)) in STARTER_MENU.iter().enumerate() {
+    let mut filled_image_count = 0;
+    for (category_position, (category_name, category_artwork_key, items)) in
+        STARTER_MENU.iter().enumerate()
+    {
         let category_key = category_name.to_lowercase();
-        let category_id = if let Some(category_id) = category_ids.get(&category_key) {
-            category_id.clone()
+        let category_id = if let Some(category_id) = category_ids.get(&category_key).cloned() {
+            // Earlier imports created starter categories without artwork.
+            // Re-import fills only missing visuals and never overwrites an
+            // image the restaurant already chose.
+            if !category_images_present.contains(&category_id.to_string()) {
+                if database
+                    .replace_category_image(
+                        &category_id,
+                        &ros_storage::ProductImageContent::built_in(*category_artwork_key),
+                        &context,
+                    )
+                    .is_err()
+                {
+                    return workspace_with_error(
+                        &application_support_directory,
+                        "Starter menu import paused. It is safe to try again; ROS will only add missing starter entries.".to_owned(),
+                    );
+                }
+                category_images_present.insert(category_id.to_string());
+                filled_image_count += 1;
+            }
+            category_id
         } else {
             let category = match ros_core::CreateCategory::new(
                 category_name,
@@ -3275,16 +3814,49 @@ pub fn import_common_starter_menu(application_support_directory: String) -> Comm
                 Err(_) => unreachable!("literal starter category is valid"),
             };
             let category_id = category.category_id().clone();
+            if database
+                .replace_category_image(
+                    &category_id,
+                    &ros_storage::ProductImageContent::built_in(*category_artwork_key),
+                    &context,
+                )
+                .is_err()
+            {
+                return workspace_with_error(
+                    &application_support_directory,
+                    "Starter menu import paused. It is safe to try again; ROS will only add missing starter entries.".to_owned(),
+                );
+            }
+            category_images_present.insert(category_id.to_string());
             category_ids.insert(category_key, category_id.clone());
             added_category_count += 1;
             category_id
         };
-        for (item_position, item_name) in items.iter().enumerate() {
+        for (item_position, (item_name, item_image_key)) in items.iter().enumerate() {
             let item_key = (Some(category_id.to_string()), item_name.to_lowercase());
-            if product_names.contains_key(&item_key) {
+            if let Some(product) = products_by_key.get(&item_key) {
+                if !product_images_present.contains(&product.product_id().to_string()) {
+                    if database
+                        .replace_product_image(
+                            product.product_id(),
+                            &ros_storage::ProductImageContent::built_in(*item_image_key),
+                            &context,
+                        )
+                        .is_err()
+                    {
+                        return workspace_with_error(
+                            &application_support_directory,
+                            "Starter menu import paused. It is safe to try again; ROS will only add missing starter entries.".to_owned(),
+                        );
+                    }
+                    product_images_present.insert(product.product_id().to_string());
+                    filled_image_count += 1;
+                }
                 continue;
             }
-            let price = match ros_core::Money::new(0, branch.currency()) {
+            // One major currency unit (₹1.00 for INR) keeps POS sellable while
+            // remaining obviously temporary until the owner sets real prices.
+            let price = match ros_core::Money::new(100, branch.currency()) {
                 Ok(price) => price,
                 Err(_) => {
                     return workspace_with_error(
@@ -3304,7 +3876,9 @@ pub fn import_common_starter_menu(application_support_directory: String) -> Comm
                 Ok(command) => command,
                 Err(_) => unreachable!("literal starter menu item is valid"),
             };
-            let product = match database.create_product(&command, &context) {
+            let image = ros_storage::ProductImageContent::built_in(*item_image_key);
+            let product = match database.create_product_with_image(&command, Some(&image), &context)
+            {
                 Ok(product) => product,
                 Err(_) => {
                     return workspace_with_error(
@@ -3313,30 +3887,30 @@ pub fn import_common_starter_menu(application_support_directory: String) -> Comm
                     );
                 }
             };
-            if database
-                .set_product_availability(
-                    product.product_id(),
-                    product.revision(),
-                    false,
-                    &review_reason,
-                    &context,
-                )
-                .is_err()
-            {
-                return workspace_with_error(
-                        &application_support_directory,
-                    "Starter menu import paused. It is safe to try again; ROS will only add missing starter entries.".to_owned(),
-                );
-            }
-            product_names.insert(item_key, ());
+            product_images_present.insert(product.product_id().to_string());
+            products_by_key.insert(item_key, product);
             added_item_count += 1;
         }
     }
-    let status = if added_category_count == 0 && added_item_count == 0 {
+    let status = if added_category_count == 0 && added_item_count == 0 && filled_image_count == 0 {
         "Starter menu is already present • no duplicate categories or items were added.".to_owned()
-    } else {
+    } else if added_category_count == 0 && added_item_count == 0 {
         format!(
-            "Starter menu updated • added {added_category_count} categor{} and {added_item_count} item{}. Review each price, then resume the items you want to sell.",
+            "Starter menu images updated • filled {filled_image_count} missing categor{} and dish photo{}.",
+            if filled_image_count == 1 { "y" } else { "ies" },
+            if filled_image_count == 1 { "" } else { "s" },
+        )
+    } else {
+        let image_note = if filled_image_count == 0 {
+            String::new()
+        } else {
+            format!(
+                " Also filled {filled_image_count} missing image{}.",
+                if filled_image_count == 1 { "" } else { "s" }
+            )
+        };
+        format!(
+            "Starter menu updated • added {added_category_count} categor{} and {added_item_count} item{} at ₹1, ready to sell.{image_note} Update prices anytime in Menu.",
             if added_category_count == 1 { "y" } else { "ies" },
             if added_item_count == 1 { "" } else { "s" },
         )
@@ -5328,14 +5902,114 @@ fn workspace_with_error(
 fn open_community_database(
     application_support_directory: &str,
 ) -> Result<ros_storage::LocalDatabase, String> {
-    let support_directory = PathBuf::from(application_support_directory);
-    let database_path = support_directory.join(COMMUNITY_DATABASE_FILE_NAME);
+    let registry = load_or_migrate_profile_registry(application_support_directory)?;
+    let profile_id = registry.active_profile_id.as_str();
+    let database_path = community_database_path(application_support_directory, profile_id);
+    if let Some(parent) = database_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| {
+            "Local storage needs attention • application data directory is unavailable".to_owned()
+        })?;
+    }
+    ros_storage::open_or_create_platform_database_for_profile(&database_path, profile_id)
+        .map_err(user_safe_bootstrap_status)
+}
 
-    std::fs::create_dir_all(&support_directory).map_err(|_| {
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct ProfileRegistryFile {
+    active_profile_id: String,
+    #[serde(default)]
+    edition: Option<String>,
+    #[serde(default)]
+    device_role: Option<String>,
+    profiles: Vec<ProfileRegistryEntry>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct ProfileRegistryEntry {
+    profile_id: String,
+    label: String,
+    created_at_utc: String,
+}
+
+fn profile_registry_path(application_support_directory: &str) -> PathBuf {
+    PathBuf::from(application_support_directory).join("restaurant-profiles.json")
+}
+
+fn community_database_path(application_support_directory: &str, profile_id: &str) -> PathBuf {
+    let root = PathBuf::from(application_support_directory);
+    if profile_id == "default" {
+        root.join(COMMUNITY_DATABASE_FILE_NAME)
+    } else {
+        root.join("profiles")
+            .join(profile_id)
+            .join(COMMUNITY_DATABASE_FILE_NAME)
+    }
+}
+
+fn load_or_migrate_profile_registry(
+    application_support_directory: &str,
+) -> Result<ProfileRegistryFile, String> {
+    let path = profile_registry_path(application_support_directory);
+    if path.exists() {
+        let bytes = std::fs::read(&path).map_err(|_| {
+            "Local storage needs attention • restaurant profile list could not be read".to_owned()
+        })?;
+        return serde_json::from_slice(&bytes).map_err(|_| {
+            "Local storage needs attention • restaurant profile list is unreadable".to_owned()
+        });
+    }
+    std::fs::create_dir_all(application_support_directory).map_err(|_| {
         "Local storage needs attention • application data directory is unavailable".to_owned()
     })?;
-    ros_storage::open_or_create_platform_database(&database_path)
-        .map_err(user_safe_bootstrap_status)
+    let legacy_db = PathBuf::from(application_support_directory).join(COMMUNITY_DATABASE_FILE_NAME);
+    let created_at = chrono_like_utc_now();
+    let registry = if legacy_db.exists() {
+        ProfileRegistryFile {
+            active_profile_id: "default".to_owned(),
+            edition: Some("community".to_owned()),
+            device_role: Some("hub".to_owned()),
+            profiles: vec![ProfileRegistryEntry {
+                profile_id: "default".to_owned(),
+                label: "Restaurant".to_owned(),
+                created_at_utc: created_at,
+            }],
+        }
+    } else {
+        ProfileRegistryFile {
+            active_profile_id: "default".to_owned(),
+            edition: None,
+            device_role: None,
+            profiles: vec![ProfileRegistryEntry {
+                profile_id: "default".to_owned(),
+                label: "Restaurant".to_owned(),
+                created_at_utc: created_at,
+            }],
+        }
+    };
+    save_profile_registry(application_support_directory, &registry)?;
+    Ok(registry)
+}
+
+fn save_profile_registry(
+    application_support_directory: &str,
+    registry: &ProfileRegistryFile,
+) -> Result<(), String> {
+    let path = profile_registry_path(application_support_directory);
+    let bytes = serde_json::to_vec_pretty(registry).map_err(|_| {
+        "Local storage needs attention • restaurant profile list could not be saved".to_owned()
+    })?;
+    std::fs::write(path, bytes).map_err(|_| {
+        "Local storage needs attention • restaurant profile list could not be saved".to_owned()
+    })
+}
+
+fn chrono_like_utc_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    format!("{secs}")
 }
 
 /// Deliberately collapses internal storage, SQLCipher, and operating-system
@@ -5657,6 +6331,22 @@ mod tests {
             licence_url: "https://www.pexels.com/legal-pages/license/".to_owned(),
             service_origin: GOTIGIN_CATALOG_SERVICE_ORIGIN.to_owned(),
             service_schema_version: GOTIGIN_CATALOG_SERVICE_SCHEMA_VERSION,
+        }
+    }
+
+    #[test]
+    fn starter_menu_uses_only_supported_built_in_image_keys() {
+        for (category_name, category_artwork_key, items) in STARTER_MENU {
+            assert!(
+                ros_storage::is_supported_builtin_category_image_key(category_artwork_key),
+                "starter category '{category_name}' references unknown artwork '{category_artwork_key}'",
+            );
+            for (item_name, item_image_key) in *items {
+                assert!(
+                    ros_storage::is_supported_builtin_menu_image_key(item_image_key),
+                    "starter item '{item_name}' references unknown menu image '{item_image_key}'",
+                );
+            }
         }
     }
 

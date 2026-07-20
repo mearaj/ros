@@ -6,15 +6,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../src/rust/api/simple.dart';
+import '../../theme/app_theme.dart';
+import '../../theme/appearance.dart';
+import '../../widgets/interactive_chrome.dart';
+import '../catalog/menu_item_image.dart';
+import '../catalog/remote_menu_image_catalog.dart';
+import '../point_of_sale/pos_workspace.dart';
 import 'branch_time.dart';
 import 'diagnostics_breadcrumbs.dart';
 import 'diagnostics_share.dart';
 import 'money_input.dart';
-import '../catalog/menu_item_image.dart';
-import '../catalog/remote_menu_image_catalog.dart';
-import '../point_of_sale/pos_workspace.dart';
-import '../../src/rust/api/simple.dart';
-import '../../theme/app_theme.dart';
 
 enum _Destination { overview, pointOfSale, kitchen, inventory, reports }
 
@@ -40,6 +42,10 @@ class _RestaurantShellState extends State<RestaurantShell> {
   _Destination _destination = _Destination.overview;
   late CommunityWorkspace _workspace;
   CommunityStaffSecurity? _staffSecurity;
+  CommunityRestaurantProfileRegistry? _profileRegistry;
+  /// Lets Owner PIN onboarding return to edition/device-role without clearing
+  /// a saved registry when the user only wants to revise first-run choices.
+  var _revisitingFirstRunSetup = false;
   Timer? _sessionRefreshTimer;
   var _isSaving = false;
 
@@ -55,6 +61,7 @@ class _RestaurantShellState extends State<RestaurantShell> {
         unawaited(_refreshStaffSecurity());
       }
     });
+    unawaited(_refreshProfileRegistry());
   }
 
   @override
@@ -65,13 +72,36 @@ class _RestaurantShellState extends State<RestaurantShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (_requiresEditionSetup) {
+      return _EditionDeviceRoleGate(
+        isSaving: _isSaving,
+        initialEdition: _profileRegistry?.edition,
+        initialDeviceRole: _profileRegistry?.deviceRole,
+        onContinue: (edition, deviceRole) async {
+          await _setEditionAndDeviceRole(edition, deviceRole);
+          if (mounted) {
+            setState(() => _revisitingFirstRunSetup = false);
+          }
+        },
+      );
+    }
     if (_requiresStaffUnlock) {
       return _StaffSecurityGate(
         security: _staffSecurity ?? _unavailableStaffSecurity,
         isSaving: _isSaving,
+        canReturnToFirstRunSetup:
+            _staffSecurity?.ownerPinSetupRequired == true,
         onConfigureOwnerPin: _configureOwnerPin,
+        onRecoverOwnerPin: _recoverOwnerPin,
         onUnlock: _unlockStaff,
         onRetry: _refreshStaffSecurity,
+        onBackToFirstRunSetup: () {
+          setState(() => _revisitingFirstRunSetup = true);
+        },
+        onStartNewRestaurant: _startNewRestaurantProfile,
+        onActivateRestaurant: _activateRestaurantProfile,
+        onListProfiles: _listRestaurantProfiles,
+        onRestorePortable: _restorePortableBackup,
       );
     }
     return LayoutBuilder(
@@ -88,65 +118,79 @@ class _RestaurantShellState extends State<RestaurantShell> {
             textScale < 1.4;
 
         return Scaffold(
-          body: Row(
+          body: Stack(
             children: [
-              if (isWide)
-                _Sidebar(
-                  destination: _destination,
-                  onChanged: _setDestination,
-                  showLocalOnlyBadge: constraints.maxHeight >= 760,
-                ),
-              Expanded(
-                child: SafeArea(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    child: _buildContent(),
+              Row(
+                children: [
+                  if (isWide)
+                    _Sidebar(
+                      destination: _destination,
+                      onChanged: _setDestination,
+                      showLocalOnlyBadge: constraints.maxHeight >= 760,
+                    ),
+                  Expanded(
+                    child: SafeArea(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: _buildContent(),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
+              if (!isWide)
+                const Positioned(
+                  top: 4,
+                  right: 4,
+                  child: SafeArea(child: AppearanceMenuButton()),
+                ),
             ],
           ),
           bottomNavigationBar: isWide
               ? null
-              : NavigationBar(
-                  selectedIndex: _Destination.values.indexOf(_destination),
-                  onDestinationSelected: (index) {
-                    _setDestination(_Destination.values[index]);
-                  },
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.space_dashboard_outlined),
-                      selectedIcon: Icon(Icons.space_dashboard),
-                      label: 'Overview',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.point_of_sale_outlined),
-                      selectedIcon: Icon(Icons.point_of_sale),
-                      label: 'POS',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.soup_kitchen_outlined),
-                      selectedIcon: Icon(Icons.soup_kitchen),
-                      label: 'Kitchen',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.menu_book_outlined),
-                      selectedIcon: Icon(Icons.menu_book),
-                      label: 'Menu',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.insights_outlined),
-                      selectedIcon: Icon(Icons.insights),
-                      label: 'Reports',
-                    ),
-                  ],
+              : InteractiveChrome(
+                  child: NavigationBar(
+                    selectedIndex: _Destination.values.indexOf(_destination),
+                    onDestinationSelected: (index) {
+                      _setDestination(_Destination.values[index]);
+                    },
+                    destinations: const [
+                      NavigationDestination(
+                        icon: Icon(Icons.space_dashboard_outlined),
+                        selectedIcon: Icon(Icons.space_dashboard),
+                        label: 'Overview',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.point_of_sale_outlined),
+                        selectedIcon: Icon(Icons.point_of_sale),
+                        label: 'POS',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.soup_kitchen_outlined),
+                        selectedIcon: Icon(Icons.soup_kitchen),
+                        label: 'Kitchen',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.menu_book_outlined),
+                        selectedIcon: Icon(Icons.menu_book),
+                        label: 'Menu',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.more_horiz),
+                        selectedIcon: Icon(Icons.more_horiz),
+                        label: 'More',
+                      ),
+                    ],
+                  ),
                 ),
           floatingActionButton: _staffSecurity?.activeStaffId == null
               ? null
-              : FloatingActionButton.small(
-                  tooltip: 'Lock staff session',
-                  onPressed: _isSaving ? null : _lockStaff,
-                  child: const Icon(Icons.lock_outline),
+              : InteractiveChrome(
+                  child: FloatingActionButton.small(
+                    tooltip: 'Lock staff session',
+                    onPressed: _isSaving ? null : _lockStaff,
+                    child: const Icon(Icons.lock_outline),
+                  ),
                 ),
         );
       },
@@ -156,12 +200,23 @@ class _RestaurantShellState extends State<RestaurantShell> {
   void _setDestination(_Destination destination) {
     if (!_canAccessDestination(destination)) {
       final messenger = ScaffoldMessenger.maybeOf(context);
-      final message = _storageNeedsAttention
-          ? 'Secure local storage must be resolved before opening this workspace.'
-          : 'This workspace is not available to the active role.';
+      final denial = _destinationDenial(destination);
+      // During first-time setup, take the owner to Menu instead of leaving them
+      // on Overview with a dead-end snackbar that used to blame their "role".
+      if (_workspace.setupRequired &&
+          !_storageNeedsAttention &&
+          (destination == _Destination.pointOfSale ||
+              destination == _Destination.kitchen ||
+              destination == _Destination.reports)) {
+        recordDiagnosticBreadcrumb(
+          applicationSupportDirectory: widget.applicationSupportDirectory,
+          eventCode: DiagnosticBreadcrumbs.navInventory,
+        );
+        setState(() => _destination = _Destination.inventory);
+      }
       messenger
         ?..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(message)));
+        ..showSnackBar(SnackBar(content: Text(denial)));
       return;
     }
     final breadcrumb = switch (destination) {
@@ -183,6 +238,29 @@ class _RestaurantShellState extends State<RestaurantShell> {
   bool get _storageNeedsAttention =>
       _workspace.storageStatus.startsWith('Local storage needs attention');
 
+  String _destinationDenial(_Destination destination) {
+    if (_storageNeedsAttention) {
+      return 'Secure local storage must be resolved before opening this workspace.';
+    }
+    if (_workspace.setupRequired) {
+      return 'Finish restaurant setup in Menu before opening this workspace.';
+    }
+    final role = _staffSecurity?.activeStaffRole;
+    if (role == null || role.isEmpty) {
+      return 'Unlock with your staff PIN before opening this workspace.';
+    }
+    return switch (destination) {
+      _Destination.pointOfSale =>
+        'Point of Sale is available to Owner, Manager, and Cashier. Unlock as one of those roles to continue.',
+      _Destination.kitchen =>
+        'Kitchen is available to Owner, Manager, and Kitchen staff. Unlock as one of those roles to continue.',
+      _Destination.inventory || _Destination.reports =>
+        'Menu and More are available to Owner and Manager. Unlock as one of those roles to continue.',
+      _Destination.overview =>
+        'This workspace is not available while unlocked as $role.',
+    };
+  }
+
   bool _canAccessDestination(_Destination destination) {
     if (_storageNeedsAttention) {
       return destination == _Destination.overview ||
@@ -202,6 +280,17 @@ class _RestaurantShellState extends State<RestaurantShell> {
       _Destination.inventory ||
       _Destination.reports => role == 'owner' || role == 'manager',
     };
+  }
+
+  bool get _requiresEditionSetup {
+    if (_revisitingFirstRunSetup) {
+      return true;
+    }
+    final registry = _profileRegistry;
+    if (registry == null || !registry.available) {
+      return false;
+    }
+    return registry.edition == null || registry.deviceRole == null;
   }
 
   bool get _requiresStaffUnlock {
@@ -264,7 +353,55 @@ class _RestaurantShellState extends State<RestaurantShell> {
     }
   }
 
-  Future<void> _configureOwnerPin(String pin) async {
+  Future<void> _refreshProfileRegistry() async {
+    if (widget.applicationSupportDirectory.isEmpty) {
+      return;
+    }
+    try {
+      final registry = await listCommunityRestaurantProfiles(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+      );
+      if (mounted) {
+        setState(() => _profileRegistry = registry);
+      }
+    } catch (_) {
+      // Widget tests and degraded bootstrap keep the staff gate usable when
+      // the profile registry bridge is unavailable.
+    }
+  }
+
+  Future<CommunityRestaurantProfileRegistry> _listRestaurantProfiles() async {
+    final registry = await listCommunityRestaurantProfiles(
+      applicationSupportDirectory: widget.applicationSupportDirectory,
+    );
+    if (mounted) {
+      setState(() => _profileRegistry = registry);
+    }
+    return registry;
+  }
+
+  Future<void> _setEditionAndDeviceRole(String edition, String deviceRole) async {
+    if (_isSaving || widget.applicationSupportDirectory.isEmpty) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final registry = await setCommunityEditionAndDeviceRole(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+        edition: edition,
+        deviceRole: deviceRole,
+      );
+      if (mounted) {
+        setState(() => _profileRegistry = registry);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _configureOwnerPin(String pin, String recoveryPassphrase) async {
     if (_isSaving || widget.applicationSupportDirectory.isEmpty) {
       return;
     }
@@ -273,6 +410,7 @@ class _RestaurantShellState extends State<RestaurantShell> {
       final security = await configureCommunityOwnerPin(
         applicationSupportDirectory: widget.applicationSupportDirectory,
         pin: pin,
+        recoveryPassphrase: recoveryPassphrase,
       );
       if (mounted) {
         setState(() => _staffSecurity = security);
@@ -280,6 +418,125 @@ class _RestaurantShellState extends State<RestaurantShell> {
           await _reloadAuthorizedWorkspace(security.activeStaffId!);
         }
       }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _recoverOwnerPin(
+    String recoveryPassphrase,
+    String newOwnerPin,
+  ) async {
+    if (_isSaving || widget.applicationSupportDirectory.isEmpty) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final security = await recoverCommunityOwnerPin(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+        recoveryPassphrase: recoveryPassphrase,
+        newOwnerPin: newOwnerPin,
+      );
+      if (mounted) {
+        setState(() {
+          _staffSecurity = security;
+          if (security.activeStaffId == null) {
+            _workspace = _redactedWorkspace(security.storageStatus);
+          }
+        });
+        if (security.activeStaffId != null) {
+          await _reloadAuthorizedWorkspace(security.activeStaffId!);
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _applyActiveProfileChange(
+    CommunityRestaurantProfileRegistry registry,
+  ) async {
+    if (!mounted) return;
+    setState(() => _profileRegistry = registry);
+    if (!registry.available) {
+      return;
+    }
+    final security = await loadCommunityStaffSecurity(
+      applicationSupportDirectory: widget.applicationSupportDirectory,
+    );
+    var nextSecurity = security;
+    if (security.available && security.activeStaffId != null) {
+      nextSecurity = await lockCommunityStaff(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      _staffSecurity = nextSecurity;
+      _workspace = _redactedWorkspace(nextSecurity.storageStatus);
+      _destination = _Destination.overview;
+    });
+  }
+
+  Future<void> _startNewRestaurantProfile(String label) async {
+    if (_isSaving || widget.applicationSupportDirectory.isEmpty) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final registry = await startNewCommunityRestaurantProfile(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+        label: label,
+      );
+      await _applyActiveProfileChange(registry);
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _activateRestaurantProfile(String profileId) async {
+    if (_isSaving || widget.applicationSupportDirectory.isEmpty) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final registry = await activateCommunityRestaurantProfile(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+        profileId: profileId,
+      );
+      await _applyActiveProfileChange(registry);
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _restorePortableBackup({
+    required String backupFilePath,
+    required String envelopeFilePath,
+    required String recoveryPassphrase,
+    required String profileLabel,
+  }) async {
+    if (_isSaving || widget.applicationSupportDirectory.isEmpty) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final registry = await restoreCommunityPortableBackup(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+        backupFilePath: backupFilePath,
+        envelopeFilePath: envelopeFilePath,
+        recoveryPassphrase: recoveryPassphrase,
+        profileLabel: profileLabel,
+      );
+      await _applyActiveProfileChange(registry);
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -439,6 +696,7 @@ class _RestaurantShellState extends State<RestaurantShell> {
         key: const ValueKey('reports'),
         applicationSupportDirectory: widget.applicationSupportDirectory,
         activeStaffRole: role,
+        onRestaurantProfileChanged: _applyActiveProfileChange,
       ),
     };
   }
@@ -929,14 +1187,14 @@ class _RestaurantShellState extends State<RestaurantShell> {
     }
   }
 
-  Future<void> _updateProductPrice({
+  Future<CommunityWorkspace?> _updateProductPrice({
     required String productId,
     required int expectedRevision,
     required int unitPriceMinor,
     required String reason,
   }) async {
     if (_isSaving || widget.applicationSupportDirectory.isEmpty) {
-      return;
+      return null;
     }
 
     setState(() {
@@ -952,11 +1210,12 @@ class _RestaurantShellState extends State<RestaurantShell> {
         reason: reason,
       );
       if (!mounted) {
-        return;
+        return null;
       }
       setState(() {
         _workspace = workspace;
       });
+      return workspace;
     } finally {
       if (mounted) {
         setState(() {
@@ -1439,36 +1698,73 @@ class _StaffSecurityGate extends StatefulWidget {
   const _StaffSecurityGate({
     required this.security,
     required this.isSaving,
+    required this.canReturnToFirstRunSetup,
     required this.onConfigureOwnerPin,
+    required this.onRecoverOwnerPin,
     required this.onUnlock,
     required this.onRetry,
+    required this.onBackToFirstRunSetup,
+    required this.onStartNewRestaurant,
+    required this.onActivateRestaurant,
+    required this.onListProfiles,
+    required this.onRestorePortable,
   });
 
   final CommunityStaffSecurity security;
   final bool isSaving;
-  final Future<void> Function(String pin) onConfigureOwnerPin;
+  final bool canReturnToFirstRunSetup;
+  final Future<void> Function(String pin, String recoveryPassphrase)
+  onConfigureOwnerPin;
+  final Future<void> Function(String recoveryPassphrase, String newOwnerPin)
+  onRecoverOwnerPin;
   final Future<void> Function(String staffId, String pin) onUnlock;
   final Future<void> Function() onRetry;
+  final VoidCallback onBackToFirstRunSetup;
+  final Future<void> Function(String label) onStartNewRestaurant;
+  final Future<void> Function(String profileId) onActivateRestaurant;
+  final Future<CommunityRestaurantProfileRegistry> Function() onListProfiles;
+  final Future<void> Function({
+    required String backupFilePath,
+    required String envelopeFilePath,
+    required String recoveryPassphrase,
+    required String profileLabel,
+  })
+  onRestorePortable;
 
   @override
   State<_StaffSecurityGate> createState() => _StaffSecurityGateState();
 }
 
+enum _StaffGateMode { unlock, setup, recover }
+
 class _StaffSecurityGateState extends State<_StaffSecurityGate> {
   final _formKey = GlobalKey<FormState>();
   final _pinController = TextEditingController();
   final _confirmPinController = TextEditingController();
+  final _passphraseController = TextEditingController();
+  final _confirmPassphraseController = TextEditingController();
   String? _selectedStaffId;
+  late _StaffGateMode _mode;
 
   @override
   void initState() {
     super.initState();
+    _mode = widget.security.ownerPinSetupRequired
+        ? _StaffGateMode.setup
+        : _StaffGateMode.unlock;
     _selectFirstEligibleStaff();
   }
 
   @override
   void didUpdateWidget(covariant _StaffSecurityGate oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.security.ownerPinSetupRequired &&
+        _mode == _StaffGateMode.unlock) {
+      _mode = _StaffGateMode.setup;
+    } else if (!widget.security.ownerPinSetupRequired &&
+        _mode == _StaffGateMode.setup) {
+      _mode = _StaffGateMode.unlock;
+    }
     _selectFirstEligibleStaff();
   }
 
@@ -1476,6 +1772,8 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
   void dispose() {
     _pinController.dispose();
     _confirmPinController.dispose();
+    _passphraseController.dispose();
+    _confirmPassphraseController.dispose();
     super.dispose();
   }
 
@@ -1492,88 +1790,185 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
   @override
   Widget build(BuildContext context) {
     final security = widget.security;
-    final setup = security.ownerPinSetupRequired;
     final unavailable = !security.available;
+    final setup = _mode == _StaffGateMode.setup;
+    final recover = _mode == _StaffGateMode.recover;
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: unavailable
-                      ? _UnavailableSecurityContent(
-                          status: security.storageStatus,
-                          busy: widget.isSaving,
-                          onRetry: widget.onRetry,
-                        )
-                      : Form(
-                          key: _formKey,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                setup
-                                    ? Icons.admin_panel_settings_outlined
-                                    : Icons.lock_outline,
-                                size: 36,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                              const SizedBox(height: 18),
-                              Text(
-                                setup
-                                    ? 'Secure your restaurant'
-                                    : 'Unlock Restaurant Operating System',
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                setup
-                                    ? 'Create the owner PIN for this device. It protects operational changes and is stored only as an Argon2id verifier.'
-                                    : 'Choose your staff account and enter its PIN. The session expires after 15 minutes or when you lock it.',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
-                              ),
-                              const SizedBox(height: 22),
-                              _SecurityStatus(status: security.storageStatus),
-                              const SizedBox(height: 20),
-                              if (setup) ...[
-                                TextFormField(
-                                  key: const Key('owner-pin'),
+        child: Stack(
+          children: [
+            const Positioned(
+              top: 8,
+              right: 8,
+              child: AppearanceMenuButton(),
+            ),
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: unavailable
+                          ? _UnavailableSecurityContent(
+                              status: security.storageStatus,
+                              busy: widget.isSaving,
+                              onRetry: widget.onRetry,
+                            )
+                          : Form(
+                              key: _formKey,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    setup
+                                        ? Icons.admin_panel_settings_outlined
+                                        : recover
+                                        ? Icons.key_outlined
+                                        : Icons.lock_outline,
+                                    size: 36,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Text(
+                                    setup
+                                        ? 'Secure your restaurant'
+                                        : recover
+                                        ? 'Reset Owner PIN'
+                                        : 'Unlock Restaurant Operating System',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    setup
+                                        ? 'Create the owner PIN and a recovery passphrase. The PIN unlocks daily work. The passphrase resets a forgotten Owner PIN and unlocks a portable recovery kit.'
+                                        : recover
+                                        ? 'Enter the recovery passphrase created at Owner setup, then choose a new Owner PIN. Failed attempts are rate-limited.'
+                                        : 'Choose your staff account and enter its PIN. The session expires after 15 minutes or when you lock it.',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 22),
+                                  _SecurityStatus(status: security.storageStatus),
+                                  const SizedBox(height: 20),
+                                  if (setup) ...[
+                                _ObscurableTextFormField(
+                                  fieldKey: const Key('owner-pin'),
                                   controller: _pinController,
                                   enabled: !widget.isSaving,
                                   autofocus: true,
-                                  obscureText: true,
                                   keyboardType: TextInputType.number,
                                   maxLength: 12,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Owner PIN',
-                                    hintText: '6 to 12 digits',
-                                    prefixIcon: Icon(Icons.password_outlined),
-                                  ),
+                                  textInputAction: TextInputAction.next,
+                                  labelText: 'Owner PIN',
+                                  hintText: '6 to 12 digits',
+                                  prefixIcon: Icons.password_outlined,
                                   validator: _pinValidator,
                                 ),
                                 const SizedBox(height: 12),
-                                TextFormField(
-                                  key: const Key('owner-pin-confirm'),
+                                _ObscurableTextFormField(
+                                  fieldKey: const Key('owner-pin-confirm'),
                                   controller: _confirmPinController,
                                   enabled: !widget.isSaving,
-                                  obscureText: true,
                                   keyboardType: TextInputType.number,
                                   maxLength: 12,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Confirm owner PIN',
-                                    prefixIcon: Icon(Icons.password_outlined),
+                                  textInputAction: TextInputAction.next,
+                                  labelText: 'Confirm owner PIN',
+                                  prefixIcon: Icons.password_outlined,
+                                  validator: (value) =>
+                                      value == _pinController.text
+                                      ? null
+                                      : 'PINs do not match',
+                                ),
+                                const SizedBox(height: 12),
+                                _ObscurableTextFormField(
+                                  fieldKey: const Key(
+                                    'owner-recovery-passphrase',
                                   ),
+                                  controller: _passphraseController,
+                                  enabled: !widget.isSaving,
+                                  maxLength: 64,
+                                  textInputAction: TextInputAction.next,
+                                  labelText: 'Recovery passphrase',
+                                  hintText: '24 to 64 characters',
+                                  prefixIcon: Icons.vpn_key_outlined,
+                                  validator: _passphraseValidator,
+                                ),
+                                const SizedBox(height: 12),
+                                _ObscurableTextFormField(
+                                  fieldKey: const Key(
+                                    'owner-recovery-passphrase-confirm',
+                                  ),
+                                  controller: _confirmPassphraseController,
+                                  enabled: !widget.isSaving,
+                                  maxLength: 64,
+                                  textInputAction: TextInputAction.done,
+                                  onFieldSubmitted: (_) {
+                                    if (!widget.isSaving) {
+                                      unawaited(_submitPrimary());
+                                    }
+                                  },
+                                  labelText: 'Confirm recovery passphrase',
+                                  prefixIcon: Icons.vpn_key_outlined,
+                                  validator: (value) =>
+                                      value == _passphraseController.text
+                                      ? null
+                                      : 'Passphrases do not match',
+                                ),
+                              ] else if (recover) ...[
+                                _ObscurableTextFormField(
+                                  fieldKey: const Key('recover-passphrase'),
+                                  controller: _passphraseController,
+                                  enabled: !widget.isSaving,
+                                  autofocus: true,
+                                  maxLength: 64,
+                                  textInputAction: TextInputAction.next,
+                                  labelText: 'Recovery passphrase',
+                                  hintText: '24 to 64 characters',
+                                  prefixIcon: Icons.vpn_key_outlined,
+                                  validator: _passphraseValidator,
+                                ),
+                                const SizedBox(height: 12),
+                                _ObscurableTextFormField(
+                                  fieldKey: const Key('recover-owner-pin'),
+                                  controller: _pinController,
+                                  enabled: !widget.isSaving,
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 12,
+                                  textInputAction: TextInputAction.next,
+                                  labelText: 'New Owner PIN',
+                                  hintText: '6 to 12 digits',
+                                  prefixIcon: Icons.password_outlined,
+                                  validator: _pinValidator,
+                                ),
+                                const SizedBox(height: 12),
+                                _ObscurableTextFormField(
+                                  fieldKey: const Key(
+                                    'recover-owner-pin-confirm',
+                                  ),
+                                  controller: _confirmPinController,
+                                  enabled: !widget.isSaving,
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 12,
+                                  textInputAction: TextInputAction.done,
+                                  onFieldSubmitted: (_) {
+                                    if (!widget.isSaving) {
+                                      unawaited(_submitPrimary());
+                                    }
+                                  },
+                                  labelText: 'Confirm new Owner PIN',
+                                  prefixIcon: Icons.password_outlined,
                                   validator: (value) =>
                                       value == _pinController.text
                                       ? null
@@ -1608,38 +2003,55 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
                                       .toList(growable: false),
                                 ),
                                 const SizedBox(height: 12),
-                                TextFormField(
-                                  key: const Key('staff-pin'),
+                                _ObscurableTextFormField(
+                                  fieldKey: const Key('staff-pin'),
                                   controller: _pinController,
                                   enabled:
                                       !widget.isSaving &&
                                       _selectedStaffId != null,
                                   autofocus: true,
-                                  obscureText: true,
                                   keyboardType: TextInputType.number,
                                   maxLength: 12,
-                                  decoration: const InputDecoration(
-                                    labelText: 'PIN',
-                                    hintText: '6 to 12 digits',
-                                    prefixIcon: Icon(Icons.password_outlined),
-                                  ),
+                                  textInputAction: TextInputAction.done,
+                                  onFieldSubmitted: (_) {
+                                    if (!widget.isSaving) {
+                                      unawaited(_submitPrimary());
+                                    }
+                                  },
+                                  labelText: 'PIN',
+                                  hintText: '6 to 12 digits',
+                                  prefixIcon: Icons.password_outlined,
                                   validator: _pinValidator,
                                 ),
                               ],
                               const SizedBox(height: 24),
+                              if (setup && widget.canReturnToFirstRunSetup)
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton.icon(
+                                    key: const Key('back-to-first-run-setup'),
+                                    onPressed: widget.isSaving
+                                        ? null
+                                        : widget.onBackToFirstRunSetup,
+                                    icon: const Icon(Icons.arrow_back),
+                                    label: const Text('Back'),
+                                  ),
+                                ),
+                              if (setup && widget.canReturnToFirstRunSetup)
+                                const SizedBox(height: 8),
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: FilledButton.icon(
                                   key: Key(
                                     setup
                                         ? 'configure-owner-pin'
+                                        : recover
+                                        ? 'submit-recover-owner-pin'
                                         : 'unlock-staff-session',
                                   ),
                                   onPressed: widget.isSaving
                                       ? null
-                                      : setup
-                                      ? _configureOwnerPin
-                                      : _unlock,
+                                      : () => unawaited(_submitPrimary()),
                                   icon: widget.isSaving
                                       ? const SizedBox(
                                           height: 18,
@@ -1651,6 +2063,8 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
                                       : Icon(
                                           setup
                                               ? Icons.security_outlined
+                                              : recover
+                                              ? Icons.lock_reset_outlined
                                               : Icons.lock_open_outlined,
                                         ),
                                   label: Text(
@@ -1658,17 +2072,78 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
                                         ? 'Working securely…'
                                         : setup
                                         ? 'Secure this device'
+                                        : recover
+                                        ? 'Reset Owner PIN'
                                         : 'Unlock',
                                   ),
                                 ),
                               ),
+                              if (!setup) ...[
+                                const SizedBox(height: 16),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  children: [
+                                    if (!recover)
+                                      TextButton(
+                                        key: const Key('forgot-owner-pin'),
+                                        onPressed: widget.isSaving
+                                            ? null
+                                            : () => setState(() {
+                                                _mode = _StaffGateMode.recover;
+                                                _pinController.clear();
+                                                _confirmPinController.clear();
+                                                _passphraseController.clear();
+                                                _confirmPassphraseController
+                                                    .clear();
+                                              }),
+                                        child: const Text('Forgot Owner PIN'),
+                                      ),
+                                    if (recover)
+                                      TextButton.icon(
+                                        onPressed: widget.isSaving
+                                            ? null
+                                            : () => setState(() {
+                                                _mode = _StaffGateMode.unlock;
+                                                _pinController.clear();
+                                                _confirmPinController.clear();
+                                                _passphraseController.clear();
+                                                _confirmPassphraseController
+                                                    .clear();
+                                              }),
+                                        icon: const Icon(Icons.arrow_back),
+                                        label: const Text('Back to unlock'),
+                                      ),
+                                    TextButton(
+                                      key: const Key('restaurant-profiles'),
+                                      onPressed: widget.isSaving
+                                          ? null
+                                          : () => unawaited(
+                                              _showRestaurantProfiles(),
+                                            ),
+                                      child: const Text('Restaurant history'),
+                                    ),
+                                    TextButton(
+                                      key: const Key('restore-portable-kit'),
+                                      onPressed: widget.isSaving
+                                          ? null
+                                          : () => unawaited(
+                                              _showRestorePortableDialog(),
+                                            ),
+                                      child: const Text('Restore portable kit'),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -1682,19 +2157,579 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
     return null;
   }
 
-  Future<void> _configureOwnerPin() async {
+  String? _passphraseValidator(String? value) {
+    final passphrase = value ?? '';
+    if (passphrase.length < 24 || passphrase.length > 64) {
+      return 'Use 24 to 64 characters';
+    }
+    return null;
+  }
+
+  Future<void> _submitPrimary() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
-    await widget.onConfigureOwnerPin(_pinController.text);
+    switch (_mode) {
+      case _StaffGateMode.setup:
+        await widget.onConfigureOwnerPin(
+          _pinController.text,
+          _passphraseController.text,
+        );
+      case _StaffGateMode.recover:
+        await widget.onRecoverOwnerPin(
+          _passphraseController.text,
+          _pinController.text,
+        );
+      case _StaffGateMode.unlock:
+        if (_selectedStaffId == null) {
+          return;
+        }
+        await widget.onUnlock(_selectedStaffId!, _pinController.text);
+    }
   }
 
-  Future<void> _unlock() async {
-    if (!(_formKey.currentState?.validate() ?? false) ||
-        _selectedStaffId == null) {
-      return;
+  Future<void> _showRestaurantProfiles() async {
+    final registry = await widget.onListProfiles();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restaurant history'),
+        content: SizedBox(
+          width: 420,
+          child: registry.available
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(registry.storageStatus),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Opening another restaurant keeps every encrypted database on this device. Starting a new one does not delete the current one.',
+                    ),
+                    const SizedBox(height: 12),
+                    for (final profile in registry.profiles)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(profile.label),
+                        subtitle: Text(
+                          profile.isActive
+                              ? 'Active • ${profile.createdAtUtc}'
+                              : profile.createdAtUtc,
+                        ),
+                        trailing: profile.isActive
+                            ? const Icon(Icons.check_circle_outline)
+                            : TextButton(
+                                onPressed: () {
+                                  Navigator.of(dialogContext).pop();
+                                  unawaited(
+                                    widget.onActivateRestaurant(
+                                      profile.profileId,
+                                    ),
+                                  );
+                                },
+                                child: const Text('Open'),
+                              ),
+                      ),
+                  ],
+                )
+              : Text(registry.storageStatus),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            key: const Key('start-new-restaurant'),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              unawaited(_promptStartNewRestaurant());
+            },
+            child: const Text('Start new restaurant'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _promptStartNewRestaurant() async {
+    final labelController = TextEditingController();
+    try {
+      final label = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Start a new restaurant'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Creates an empty restaurant profile on this device. The previous restaurant stays in local history and can be opened later with its PIN or recovery passphrase.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: labelController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Restaurant label',
+                  hintText: 'New restaurant',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(labelController.text.trim()),
+              child: const Text('Start new'),
+            ),
+          ],
+        ),
+      );
+      if (label == null || !mounted) return;
+      await widget.onStartNewRestaurant(
+        label.isEmpty ? 'New restaurant' : label,
+      );
+    } finally {
+      labelController.dispose();
     }
-    await widget.onUnlock(_selectedStaffId!, _pinController.text);
+  }
+
+  Future<void> _showRestorePortableDialog() async {
+    final passphraseController = TextEditingController();
+    final labelController = TextEditingController(text: 'Restored restaurant');
+    String? backupPath;
+    String? envelopePath;
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Restore portable kit'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Choose the encrypted backup and its .rosrecovery envelope, then enter the recovery passphrase. Restore creates a new restaurant profile and never overwrites an existing one.',
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final result = await FilePicker.pickFiles(
+                        type: FileType.any,
+                        allowMultiple: false,
+                      );
+                      final path = result?.files.single.path;
+                      if (path != null) {
+                        setDialogState(() => backupPath = path);
+                      }
+                    },
+                    icon: const Icon(Icons.folder_open_outlined),
+                    label: Text(
+                      backupPath == null
+                          ? 'Choose backup file'
+                          : 'Backup: ${backupPath!.split(RegExp(r'[\\/]')).last}',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final result = await FilePicker.pickFiles(
+                        type: FileType.any,
+                        allowMultiple: false,
+                      );
+                      final path = result?.files.single.path;
+                      if (path != null) {
+                        setDialogState(() => envelopePath = path);
+                      }
+                    },
+                    icon: const Icon(Icons.description_outlined),
+                    label: Text(
+                      envelopePath == null
+                          ? 'Choose recovery envelope'
+                          : 'Envelope: ${envelopePath!.split(RegExp(r'[\\/]')).last}',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: labelController,
+                    decoration: const InputDecoration(
+                      labelText: 'Restaurant label',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _ObscurableTextField(
+                    controller: passphraseController,
+                    maxLength: 64,
+                    labelText: 'Recovery passphrase',
+                    hintText: '24 to 64 characters',
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final passphrase = passphraseController.text;
+                  if (backupPath == null ||
+                      envelopePath == null ||
+                      passphrase.length < 24 ||
+                      passphrase.length > 64) {
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(true);
+                },
+                child: const Text('Restore'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (confirmed != true ||
+          backupPath == null ||
+          envelopePath == null ||
+          !mounted) {
+        return;
+      }
+      final label = labelController.text.trim();
+      await widget.onRestorePortable(
+        backupFilePath: backupPath!,
+        envelopeFilePath: envelopePath!,
+        recoveryPassphrase: passphraseController.text,
+        profileLabel: label.isEmpty ? 'Restored restaurant' : label,
+      );
+    } finally {
+      passphraseController.dispose();
+      labelController.dispose();
+    }
+  }
+}
+
+enum _FirstRunStep { edition, deviceRole }
+
+class _EditionDeviceRoleGate extends StatefulWidget {
+  const _EditionDeviceRoleGate({
+    required this.isSaving,
+    required this.onContinue,
+    this.initialEdition,
+    this.initialDeviceRole,
+  });
+
+  final bool isSaving;
+  final String? initialEdition;
+  final String? initialDeviceRole;
+  final Future<void> Function(String edition, String deviceRole) onContinue;
+
+  @override
+  State<_EditionDeviceRoleGate> createState() => _EditionDeviceRoleGateState();
+}
+
+class _EditionDeviceRoleGateState extends State<_EditionDeviceRoleGate> {
+  late String _edition;
+  late String _deviceRole;
+  late _FirstRunStep _step;
+
+  @override
+  void initState() {
+    super.initState();
+    _edition = widget.initialEdition == 'paid' ? 'paid' : 'community';
+    _deviceRole = widget.initialDeviceRole == 'client' ? 'client' : 'hub';
+    // Returning from Owner PIN setup lands on device role so Back reaches edition.
+    _step = widget.initialEdition != null && widget.initialDeviceRole != null
+        ? _FirstRunStep.deviceRole
+        : _FirstRunStep.edition;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final choosingEdition = _step == _FirstRunStep.edition;
+    return Scaffold(
+      body: SafeArea(
+        child: Stack(
+          children: [
+            const Positioned(
+              top: 8,
+              right: 8,
+              child: AppearanceMenuButton(),
+            ),
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            choosingEdition
+                                ? Icons.storefront_outlined
+                                : Icons.dns_outlined,
+                            size: 36,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(height: 18),
+                          Text(
+                            choosingEdition
+                                ? 'Choose your edition'
+                                : 'Choose this device’s role',
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            choosingEdition
+                                ? 'Community is free forever and local-first. Paid keeps Professional and Enterprise paths prepared for later licensing.'
+                                : 'Hub hosts the branch database and serves paired LAN clients. Client joins an existing Hub. A one-computer restaurant still chooses Hub.',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                          const SizedBox(height: 22),
+                          if (choosingEdition)
+                            SegmentedButton<String>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: 'community',
+                                  label: Text('Community'),
+                                  icon: Icon(Icons.groups_outlined),
+                                ),
+                                ButtonSegment(
+                                  value: 'paid',
+                                  label: Text('Paid'),
+                                  icon: Icon(Icons.workspace_premium_outlined),
+                                ),
+                              ],
+                              selected: {_edition},
+                              onSelectionChanged: widget.isSaving
+                                  ? null
+                                  : (values) =>
+                                        setState(() => _edition = values.first),
+                            )
+                          else
+                            SegmentedButton<String>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: 'hub',
+                                  label: Text('Hub'),
+                                  icon: Icon(Icons.dns_outlined),
+                                ),
+                                ButtonSegment(
+                                  value: 'client',
+                                  label: Text('Client'),
+                                  icon: Icon(Icons.tablet_mac_outlined),
+                                ),
+                              ],
+                              selected: {_deviceRole},
+                              onSelectionChanged: widget.isSaving
+                                  ? null
+                                  : (values) => setState(
+                                      () => _deviceRole = values.first,
+                                    ),
+                            ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              if (!choosingEdition)
+                                TextButton.icon(
+                                  key: const Key('back-to-edition-step'),
+                                  onPressed: widget.isSaving
+                                      ? null
+                                      : () => setState(
+                                          () => _step = _FirstRunStep.edition,
+                                        ),
+                                  icon: const Icon(Icons.arrow_back),
+                                  label: const Text('Back'),
+                                ),
+                          const Spacer(),
+                          FilledButton.icon(
+                            key: Key(
+                              choosingEdition
+                                  ? 'continue-edition-step'
+                                  : 'confirm-edition-device-role',
+                            ),
+                            onPressed: widget.isSaving
+                                ? null
+                                : () {
+                                    if (choosingEdition) {
+                                      setState(
+                                        () => _step = _FirstRunStep.deviceRole,
+                                      );
+                                      return;
+                                    }
+                                    unawaited(
+                                      widget.onContinue(_edition, _deviceRole),
+                                    );
+                                  },
+                            icon: widget.isSaving
+                                ? const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.arrow_forward),
+                            label: Text(
+                              widget.isSaving
+                                  ? 'Saving…'
+                                  : choosingEdition
+                                  ? 'Continue'
+                                  : 'Continue to security',
+                            ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// PIN / passphrase field with a show/hide control. Secrets stay obscured by
+/// default; the eye toggle is for the operator who typed the value.
+class _ObscurableTextFormField extends StatefulWidget {
+  const _ObscurableTextFormField({
+    required this.controller,
+    required this.labelText,
+    required this.validator,
+    this.fieldKey,
+    this.enabled = true,
+    this.autofocus = false,
+    this.keyboardType,
+    this.maxLength,
+    this.textInputAction,
+    this.onFieldSubmitted,
+    this.hintText,
+    this.prefixIcon,
+  });
+
+  final Key? fieldKey;
+  final TextEditingController controller;
+  final bool enabled;
+  final bool autofocus;
+  final TextInputType? keyboardType;
+  final int? maxLength;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onFieldSubmitted;
+  final String labelText;
+  final String? hintText;
+  final IconData? prefixIcon;
+  final FormFieldValidator<String> validator;
+
+  @override
+  State<_ObscurableTextFormField> createState() =>
+      _ObscurableTextFormFieldState();
+}
+
+class _ObscurableTextFormFieldState extends State<_ObscurableTextFormField> {
+  var _obscured = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      key: widget.fieldKey,
+      controller: widget.controller,
+      enabled: widget.enabled,
+      autofocus: widget.autofocus,
+      obscureText: _obscured,
+      keyboardType: widget.keyboardType,
+      maxLength: widget.maxLength,
+      textInputAction: widget.textInputAction,
+      onFieldSubmitted: widget.onFieldSubmitted,
+      validator: widget.validator,
+      decoration: InputDecoration(
+        labelText: widget.labelText,
+        hintText: widget.hintText,
+        prefixIcon: widget.prefixIcon == null ? null : Icon(widget.prefixIcon),
+        suffixIcon: IconButton(
+          key: Key('toggle-visibility-${widget.labelText}'),
+          tooltip: _obscured ? 'Show' : 'Hide',
+          onPressed: widget.enabled
+              ? () => setState(() => _obscured = !_obscured)
+              : null,
+          icon: Icon(
+            _obscured
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ObscurableTextField extends StatefulWidget {
+  const _ObscurableTextField({
+    required this.controller,
+    required this.labelText,
+    this.maxLength,
+    this.hintText,
+    this.helperText,
+    this.keyboardType,
+  });
+
+  final TextEditingController controller;
+  final String labelText;
+  final String? hintText;
+  final String? helperText;
+  final TextInputType? keyboardType;
+  final int? maxLength;
+
+  @override
+  State<_ObscurableTextField> createState() => _ObscurableTextFieldState();
+}
+
+class _ObscurableTextFieldState extends State<_ObscurableTextField> {
+  var _obscured = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: widget.controller,
+      obscureText: _obscured,
+      maxLength: widget.maxLength,
+      keyboardType: widget.keyboardType,
+      decoration: InputDecoration(
+        labelText: widget.labelText,
+        hintText: widget.hintText,
+        helperText: widget.helperText,
+        suffixIcon: IconButton(
+          tooltip: _obscured ? 'Show' : 'Hide',
+          onPressed: () => setState(() => _obscured = !_obscured),
+          icon: Icon(
+            _obscured
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1783,14 +2818,14 @@ class _Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Container(
       width: 248,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         border: Border(
-          right: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant,
-          ),
+          right: BorderSide(color: scheme.outlineVariant),
         ),
       ),
       child: Column(
@@ -1800,42 +2835,51 @@ class _Sidebar extends StatelessWidget {
             child: _Brand(),
           ),
           Expanded(
-            child: NavigationRail(
-              extended: true,
-              minExtendedWidth: 248,
-              selectedIndex: _Destination.values.indexOf(destination),
-              onDestinationSelected: (index) {
-                onChanged(_Destination.values[index]);
-              },
-              backgroundColor: Colors.transparent,
-              labelType: NavigationRailLabelType.none,
-              destinations: const [
-                NavigationRailDestination(
-                  icon: Icon(Icons.space_dashboard_outlined),
-                  selectedIcon: Icon(Icons.space_dashboard),
-                  label: Text('Overview'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.point_of_sale_outlined),
-                  selectedIcon: Icon(Icons.point_of_sale),
-                  label: Text('Point of Sale'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.soup_kitchen_outlined),
-                  selectedIcon: Icon(Icons.soup_kitchen),
-                  label: Text('Kitchen Display'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.menu_book_outlined),
-                  selectedIcon: Icon(Icons.menu_book),
-                  label: Text('Menu & categories'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.insights_outlined),
-                  selectedIcon: Icon(Icons.insights),
-                  label: Text('Reports'),
-                ),
-              ],
+            child: InteractiveChrome(
+              child: NavigationRail(
+                extended: true,
+                minExtendedWidth: 248,
+                selectedIndex: _Destination.values.indexOf(destination),
+                onDestinationSelected: (index) {
+                  onChanged(_Destination.values[index]);
+                },
+                backgroundColor: Colors.transparent,
+                labelType: NavigationRailLabelType.none,
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.space_dashboard_outlined),
+                    selectedIcon: Icon(Icons.space_dashboard),
+                    label: Text('Overview'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.point_of_sale_outlined),
+                    selectedIcon: Icon(Icons.point_of_sale),
+                    label: Text('Point of Sale'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.soup_kitchen_outlined),
+                    selectedIcon: Icon(Icons.soup_kitchen),
+                    label: Text('Kitchen Display'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.menu_book_outlined),
+                    selectedIcon: Icon(Icons.menu_book),
+                    label: Text('Menu & categories'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.more_horiz),
+                    selectedIcon: Icon(Icons.more_horiz),
+                    label: Text('More'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: AppearanceMenuButton(),
             ),
           ),
           if (showLocalOnlyBadge)
@@ -1957,13 +3001,13 @@ class _TopBar extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        const CircleAvatar(
+        CircleAvatar(
           radius: 19,
-          backgroundColor: Color(0xFFDDECE2),
+          backgroundColor: Theme.of(context).extension<RestaurantColors>()!.mint,
           child: Text(
             'P',
             style: TextStyle(
-              color: Color(0xFF126B4A),
+              color: Theme.of(context).colorScheme.primary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1978,18 +3022,20 @@ class _Brand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+
     return Row(
       children: [
         Container(
           height: 38,
           width: 38,
-          decoration: const BoxDecoration(
-            color: Color(0xFF126B4A),
-            borderRadius: BorderRadius.all(Radius.circular(12)),
+          decoration: BoxDecoration(
+            color: primary,
+            borderRadius: const BorderRadius.all(Radius.circular(12)),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.restaurant_menu,
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
             size: 21,
           ),
         ),
@@ -2003,7 +3049,7 @@ class _Brand extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF126B4A),
+                  color: primary,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.5,
                 ),
@@ -2029,22 +3075,25 @@ class _LocalOnlyBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final mint = Theme.of(context).extension<RestaurantColors>()!.mint;
+
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFFE6F4EC),
-        borderRadius: BorderRadius.all(Radius.circular(14)),
+      decoration: BoxDecoration(
+        color: mint,
+        borderRadius: const BorderRadius.all(Radius.circular(14)),
       ),
-      child: const Padding(
-        padding: EdgeInsets.all(12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            Icon(Icons.shield_outlined, size: 18, color: Color(0xFF126B4A)),
-            SizedBox(width: 8),
+            Icon(Icons.shield_outlined, size: 18, color: primary),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 'Community Edition\nLocal-first and always yours',
                 style: TextStyle(
-                  color: Color(0xFF126B4A),
+                  color: primary,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -2118,7 +3167,7 @@ class _ServiceReadyCard extends StatelessWidget {
                     child: Text(
                       coreStatus,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: const Color(0xFF126B4A),
+                        color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -2147,22 +3196,25 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final surface = Theme.of(context).colorScheme.surface;
+
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.all(Radius.circular(999)),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: const BorderRadius.all(Radius.circular(999)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: const Color(0xFF126B4A), size: 16),
+            Icon(icon, color: primary, size: 16),
             const SizedBox(width: 6),
             Text(
               label,
-              style: const TextStyle(
-                color: Color(0xFF126B4A),
+              style: TextStyle(
+                color: primary,
                 fontSize: 11,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.7,
@@ -2190,7 +3242,7 @@ class _MetricsGrid extends StatelessWidget {
       const _Metric(
         label: 'Sales reports',
         value: 'Local',
-        detail: 'Verified totals live in Reports',
+        detail: 'Verified totals live in More',
         icon: Icons.payments_outlined,
       ),
       _Metric(
@@ -2583,7 +3635,7 @@ typedef _ArchiveProduct =
     });
 
 typedef _UpdateProductPrice =
-    Future<void> Function({
+    Future<CommunityWorkspace?> Function({
       required String productId,
       required int expectedRevision,
       required int unitPriceMinor,
@@ -2913,6 +3965,7 @@ class _CommunitySetupFormState extends State<_CommunitySetupForm> {
                             controller: _organizationController,
                             enabled: !widget.isSaving,
                             autofocus: true,
+                            textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'Restaurant or company name',
                               hintText: 'e.g. Saffron Table',
@@ -2925,6 +3978,7 @@ class _CommunitySetupFormState extends State<_CommunitySetupForm> {
                           TextFormField(
                             controller: _branchController,
                             enabled: !widget.isSaving,
+                            textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'First branch name',
                               hintText: 'e.g. Indiranagar',
@@ -2952,6 +4006,12 @@ class _CommunitySetupFormState extends State<_CommunitySetupForm> {
                                 _TimeZoneField(
                                   controller: _timeZoneController,
                                   enabled: !widget.isSaving,
+                                  textInputAction: TextInputAction.done,
+                                  onFieldSubmitted: (_) {
+                                    if (!widget.isSaving) {
+                                      unawaited(_submit());
+                                    }
+                                  },
                                 ),
                               ],
                             )
@@ -2976,6 +4036,12 @@ class _CommunitySetupFormState extends State<_CommunitySetupForm> {
                                   child: _TimeZoneField(
                                     controller: _timeZoneController,
                                     enabled: !widget.isSaving,
+                                    textInputAction: TextInputAction.done,
+                                    onFieldSubmitted: (_) {
+                                      if (!widget.isSaving) {
+                                        unawaited(_submit());
+                                      }
+                                    },
                                   ),
                                 ),
                               ],
@@ -3064,16 +4130,25 @@ class _CurrencyField extends StatelessWidget {
 }
 
 class _TimeZoneField extends StatelessWidget {
-  const _TimeZoneField({required this.controller, required this.enabled});
+  const _TimeZoneField({
+    required this.controller,
+    required this.enabled,
+    this.textInputAction,
+    this.onFieldSubmitted,
+  });
 
   final TextEditingController controller;
   final bool enabled;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onFieldSubmitted;
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
       enabled: enabled,
+      textInputAction: textInputAction,
+      onFieldSubmitted: onFieldSubmitted,
       decoration: const InputDecoration(
         labelText: 'Time zone',
         prefixIcon: Icon(Icons.schedule_outlined),
@@ -3202,51 +4277,53 @@ class _CategoryManagerState extends State<_CategoryManager> {
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => showModalBottomSheet<void>(
-                        context: context,
-                        isScrollControlled: true,
-                        showDragHandle: true,
-                        builder: (_) => _InventoryLedgerSheet(
-                          applicationSupportDirectory:
-                              widget.applicationSupportDirectory,
-                        ),
-                      ),
-                      icon: const Icon(Icons.inventory_2_outlined),
-                      label: const Text('Open stock ledger'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => showModalBottomSheet<void>(
-                        context: context,
-                        isScrollControlled: true,
-                        showDragHandle: true,
-                        builder: (_) => _TaxCatalogSheet(
-                          applicationSupportDirectory:
-                              widget.applicationSupportDirectory,
-                        ),
-                      ),
-                      icon: const Icon(Icons.percent_outlined),
-                      label: const Text('Tax rates'),
-                    ),
-                    if (widget.canManageStaff)
+                child: InteractiveChrome(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
                       OutlinedButton.icon(
                         onPressed: () => showModalBottomSheet<void>(
                           context: context,
                           isScrollControlled: true,
                           showDragHandle: true,
-                          builder: (_) => _StaffManagementSheet(
+                          builder: (_) => _InventoryLedgerSheet(
                             applicationSupportDirectory:
                                 widget.applicationSupportDirectory,
                           ),
                         ),
-                        icon: const Icon(Icons.manage_accounts_outlined),
-                        label: const Text('Team & PINs'),
+                        icon: const Icon(Icons.inventory_2_outlined),
+                        label: const Text('Open stock ledger'),
                       ),
-                  ],
+                      OutlinedButton.icon(
+                        onPressed: () => showModalBottomSheet<void>(
+                          context: context,
+                          isScrollControlled: true,
+                          showDragHandle: true,
+                          builder: (_) => _TaxCatalogSheet(
+                            applicationSupportDirectory:
+                                widget.applicationSupportDirectory,
+                          ),
+                        ),
+                        icon: const Icon(Icons.percent_outlined),
+                        label: const Text('Tax rates'),
+                      ),
+                      if (widget.canManageStaff)
+                        OutlinedButton.icon(
+                          onPressed: () => showModalBottomSheet<void>(
+                            context: context,
+                            isScrollControlled: true,
+                            showDragHandle: true,
+                            builder: (_) => _StaffManagementSheet(
+                              applicationSupportDirectory:
+                                  widget.applicationSupportDirectory,
+                            ),
+                          ),
+                          icon: const Icon(Icons.manage_accounts_outlined),
+                          label: const Text('Team & PINs'),
+                        ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -3281,6 +4358,7 @@ class _CategoryManagerState extends State<_CategoryManager> {
                               prefixIcon: Icon(Icons.category_outlined),
                             ),
                             textCapitalization: TextCapitalization.words,
+                            textInputAction: TextInputAction.done,
                             onFieldSubmitted: (_) => _createCategory(),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
@@ -3467,7 +4545,7 @@ class _CategoryManagerState extends State<_CategoryManager> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Import common starter menu?'),
         content: const Text(
-          'This adds common Indian restaurant categories and menu items. Every imported item starts disabled at ₹0, so review its price and resume it before selling.',
+          'This adds common Indian restaurant categories and menu items. Every imported item starts at ₹1 and is ready to sell, so you can try POS immediately. Update real prices in Menu whenever you like.',
         ),
         actions: [
           TextButton(
@@ -4128,6 +5206,7 @@ class _TaxCatalogSheetState extends State<_TaxCatalogSheet> {
               TextField(
                 controller: nameController,
                 textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(labelText: 'Display name'),
               ),
               const SizedBox(height: 8),
@@ -4139,6 +5218,20 @@ class _TaxCatalogSheetState extends State<_TaxCatalogSheet> {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                 ],
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) {
+                  final name = nameController.text.trim();
+                  final percent = double.tryParse(
+                    percentController.text.trim(),
+                  );
+                  if (name.isEmpty ||
+                      percent == null ||
+                      percent < 0 ||
+                      percent > 100) {
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(true);
+                },
                 decoration: const InputDecoration(
                   labelText: 'Rate percent',
                   helperText: 'Example: 5 for 5%',
@@ -4439,6 +5532,31 @@ class _InventoryLedgerSheetState extends State<_InventoryLedgerSheet> {
                   controller: quantityController,
                   autofocus: true,
                   keyboardType: TextInputType.number,
+                  textInputAction:
+                      (movementType == 'waste' || movementType == 'adjustment')
+                      ? TextInputAction.next
+                      : TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (movementType == 'waste' ||
+                        movementType == 'adjustment') {
+                      return;
+                    }
+                    final quantity = int.tryParse(
+                      quantityController.text.trim(),
+                    );
+                    if (quantity == null ||
+                        quantity == 0 ||
+                        (movementType != 'adjustment' && quantity < 0)) {
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(
+                      _InventoryMovementRequest(
+                        movementType: movementType,
+                        quantity: quantity,
+                        reason: null,
+                      ),
+                    );
+                  },
                   decoration: InputDecoration(
                     labelText: movementType == 'adjustment'
                         ? 'Signed quantity change'
@@ -4455,6 +5573,25 @@ class _InventoryLedgerSheetState extends State<_InventoryLedgerSheet> {
                     controller: reasonController,
                     maxLength: 500,
                     textCapitalization: TextCapitalization.sentences,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) {
+                      final quantity = int.tryParse(
+                        quantityController.text.trim(),
+                      );
+                      if (quantity == null ||
+                          quantity == 0 ||
+                          (movementType != 'adjustment' && quantity < 0) ||
+                          reasonController.text.trim().length < 3) {
+                        return;
+                      }
+                      Navigator.of(dialogContext).pop(
+                        _InventoryMovementRequest(
+                          movementType: movementType,
+                          quantity: quantity,
+                          reason: reasonController.text.trim(),
+                        ),
+                      );
+                    },
                     decoration: const InputDecoration(
                       labelText: 'Reason',
                       helperText: 'This cannot be edited or deleted later.',
@@ -4506,7 +5643,9 @@ class _InventoryLedgerSheetState extends State<_InventoryLedgerSheet> {
       reason: request.reason,
     );
     if (!mounted) return;
-    setState(() => _inventory = Future.value(inventory));
+    setState(() {
+      _inventory = Future.value(inventory);
+    });
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(inventory.storageStatus)));
@@ -4583,7 +5722,9 @@ class _InventoryLedgerSheetState extends State<_InventoryLedgerSheet> {
       reason: request.reason,
     );
     if (!mounted) return;
-    setState(() => _inventory = Future.value(inventory));
+    setState(() {
+      _inventory = Future.value(inventory);
+    });
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(inventory.storageStatus)));
@@ -4632,7 +5773,9 @@ class _InventoryLedgerSheetState extends State<_InventoryLedgerSheet> {
       reason: reason,
     );
     if (!mounted) return;
-    setState(() => _inventory = Future.value(inventory));
+    setState(() {
+      _inventory = Future.value(inventory);
+    });
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(inventory.storageStatus)));
@@ -4697,36 +5840,50 @@ class _InventoryLedgerSheetState extends State<_InventoryLedgerSheet> {
                             ? '${item.balance} units in stock • ${item.lowStock ? 'low stock' : 'tracked'}${item.lowStockThreshold == null ? '' : ' • alert at ${item.lowStockThreshold}'}'
                             : 'Not stock-tracked',
                       ),
-                      trailing: Wrap(
-                        spacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           if (item.lowStock)
-                            Icon(
-                              Icons.warning_amber_rounded,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          TextButton(
-                            onPressed: () => _recordMovement(item),
-                            child: const Text('Record'),
-                          ),
-                          IconButton(
-                            tooltip: 'Set low-stock threshold',
-                            onPressed: item.tracked
-                                ? () => _setLowStockThreshold(item)
-                                : null,
-                            icon: const Icon(
-                              Icons.notifications_active_outlined,
-                            ),
-                          ),
-                          if (item.lowStockThreshold != null)
-                            IconButton(
-                              tooltip: 'Clear low-stock threshold',
-                              onPressed: () => _clearLowStockThreshold(item),
-                              icon: const Icon(
-                                Icons.notifications_off_outlined,
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: Icon(
+                                Icons.warning_amber_rounded,
+                                color: Theme.of(context).colorScheme.error,
                               ),
                             ),
+                          PopupMenuButton<String>(
+                            tooltip: 'Manage ${item.displayName} stock',
+                            onSelected: (action) {
+                              switch (action) {
+                                case 'record':
+                                  _recordMovement(item);
+                                case 'threshold':
+                                  _setLowStockThreshold(item);
+                                case 'clear_threshold':
+                                  _clearLowStockThreshold(item);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'record',
+                                child: Text('Record movement'),
+                              ),
+                              PopupMenuItem(
+                                value: 'threshold',
+                                enabled: item.tracked,
+                                child: Text(
+                                  item.lowStockThreshold == null
+                                      ? 'Set low-stock alert'
+                                      : 'Change low-stock alert',
+                                ),
+                              ),
+                              if (item.lowStockThreshold != null)
+                                const PopupMenuItem(
+                                  value: 'clear_threshold',
+                                  child: Text('Clear low-stock alert'),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -4825,6 +5982,7 @@ class _ProductComposer extends StatelessWidget {
                     prefixIcon: Icon(Icons.restaurant_outlined),
                   ),
                   textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
                   onFieldSubmitted: (_) => onSubmit(),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -4844,6 +6002,7 @@ class _ProductComposer extends StatelessWidget {
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
+                  textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => onSubmit(),
                   validator: (value) {
                     if (parseInrPriceToMinorUnits(value ?? '') == null) {
@@ -5000,38 +6159,40 @@ class _MenuItemImagePicker extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          children: [
-            OutlinedButton.icon(
-              onPressed: enabled ? () => onCatalogImageRequested() : null,
-              icon: const Icon(Icons.cloud_outlined),
-              label: const Text('Search Gotigin photos'),
-            ),
-            OutlinedButton.icon(
-              onPressed: enabled
-                  ? () => _showBuiltInImageChooser(context)
-                  : null,
-              icon: const Icon(Icons.auto_awesome_mosaic_outlined),
-              label: Text(
-                _hasSelection ? 'Change app photo' : 'Choose app photo',
+        InteractiveChrome(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                onPressed: enabled ? () => onCatalogImageRequested() : null,
+                icon: const Icon(Icons.cloud_outlined),
+                label: const Text('Search Gotigin photos'),
               ),
-            ),
-            OutlinedButton.icon(
-              onPressed: enabled ? onUserImageRequested : null,
-              icon: const Icon(Icons.add_photo_alternate_outlined),
-              label: Text(
-                _hasSelection ? 'Use a different image' : 'Use my image',
+              OutlinedButton.icon(
+                onPressed: enabled
+                    ? () => _showBuiltInImageChooser(context)
+                    : null,
+                icon: const Icon(Icons.auto_awesome_mosaic_outlined),
+                label: Text(
+                  _hasSelection ? 'Change app photo' : 'Choose app photo',
+                ),
               ),
-            ),
-            if (_hasSelection)
-              TextButton.icon(
-                onPressed: enabled ? onImageCleared : null,
-                icon: const Icon(Icons.close),
-                label: const Text('Remove photo'),
+              OutlinedButton.icon(
+                onPressed: enabled ? onUserImageRequested : null,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: Text(
+                  _hasSelection ? 'Use a different image' : 'Use my image',
+                ),
               ),
-          ],
+              if (_hasSelection)
+                TextButton.icon(
+                  onPressed: enabled ? onImageCleared : null,
+                  icon: const Icon(Icons.close),
+                  label: const Text('Remove photo'),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -5193,7 +6354,8 @@ class _BuiltInImageChooser extends StatelessWidget {
                         : constraints.maxWidth >= 440
                         ? 3
                         : 2;
-                    return GridView.builder(
+                    return InteractiveChrome(
+                      child: GridView.builder(
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: columns,
                         mainAxisExtent: 126,
@@ -5258,6 +6420,7 @@ class _BuiltInImageChooser extends StatelessWidget {
                           ),
                         );
                       },
+                    ),
                     );
                   },
                 ),
@@ -5310,57 +6473,67 @@ class _CategoryImageSourceSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(
-                child: Icon(Icons.auto_awesome_mosaic_outlined),
+            InteractiveChrome(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.auto_awesome_mosaic_outlined),
+                    ),
+                    title: const Text('Choose app category artwork'),
+                    subtitle: const Text(
+                      'Offline, category-specific visuals included with the app',
+                    ),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(_CategoryImageAction.appArtwork),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.cloud_outlined),
+                    ),
+                    title: const Text('Search Gotigin photos'),
+                    subtitle: const Text(
+                      'Optional online catalogue with retained licence details',
+                    ),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(_CategoryImageAction.gotiginCatalogue),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.add_photo_alternate_outlined),
+                    ),
+                    title: const Text('Use my restaurant image'),
+                    subtitle: const Text(
+                      'JPEG, PNG, or WebP; compressed privately on this device',
+                    ),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(_CategoryImageAction.restaurantUpload),
+                  ),
+                  if (hasImage) ...[
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: colorScheme.errorContainer,
+                        foregroundColor: colorScheme.onErrorContainer,
+                        child: const Icon(Icons.delete_outline),
+                      ),
+                      title: const Text('Remove current image'),
+                      subtitle: const Text('Keep the category and its history'),
+                      onTap: () =>
+                          Navigator.of(context).pop(_CategoryImageAction.remove),
+                    ),
+                  ],
+                ],
               ),
-              title: const Text('Choose app category artwork'),
-              subtitle: const Text(
-                'Offline, category-specific visuals included with the app',
-              ),
-              onTap: () =>
-                  Navigator.of(context).pop(_CategoryImageAction.appArtwork),
             ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(child: Icon(Icons.cloud_outlined)),
-              title: const Text('Search Gotigin photos'),
-              subtitle: const Text(
-                'Optional online catalogue with retained licence details',
-              ),
-              onTap: () => Navigator.of(
-                context,
-              ).pop(_CategoryImageAction.gotiginCatalogue),
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(
-                child: Icon(Icons.add_photo_alternate_outlined),
-              ),
-              title: const Text('Use my restaurant image'),
-              subtitle: const Text(
-                'JPEG, PNG, or WebP; compressed privately on this device',
-              ),
-              onTap: () => Navigator.of(
-                context,
-              ).pop(_CategoryImageAction.restaurantUpload),
-            ),
-            if (hasImage) ...[
-              const Divider(),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  backgroundColor: colorScheme.errorContainer,
-                  foregroundColor: colorScheme.onErrorContainer,
-                  child: const Icon(Icons.delete_outline),
-                ),
-                title: const Text('Remove current image'),
-                subtitle: const Text('Keep the category and its history'),
-                onTap: () =>
-                    Navigator.of(context).pop(_CategoryImageAction.remove),
-              ),
-            ],
           ],
         ),
       ),
@@ -5404,7 +6577,8 @@ class _BuiltInCategoryImageChooser extends StatelessWidget {
                         : constraints.maxWidth >= 440
                         ? 3
                         : 2;
-                    return GridView.builder(
+                    return InteractiveChrome(
+                      child: GridView.builder(
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: columns,
                         mainAxisExtent: 142,
@@ -5469,6 +6643,7 @@ class _BuiltInCategoryImageChooser extends StatelessWidget {
                           ),
                         );
                       },
+                    ),
                     );
                   },
                 ),
@@ -5854,6 +7029,11 @@ const _builtInMenuImageOptions = <_BuiltInMenuImageOption>[
     icon: Icons.ramen_dining_outlined,
   ),
   _BuiltInMenuImageOption(
+    key: 'dal',
+    label: 'Dal',
+    icon: Icons.soup_kitchen_outlined,
+  ),
+  _BuiltInMenuImageOption(
     key: 'dosa',
     label: 'Dosa',
     icon: Icons.breakfast_dining_outlined,
@@ -5864,8 +7044,33 @@ const _builtInMenuImageOptions = <_BuiltInMenuImageOption>[
     icon: Icons.breakfast_dining_outlined,
   ),
   _BuiltInMenuImageOption(
+    key: 'upma',
+    label: 'Upma',
+    icon: Icons.breakfast_dining_outlined,
+  ),
+  _BuiltInMenuImageOption(
     key: 'snacks',
     label: 'Snacks',
+    icon: Icons.tapas_outlined,
+  ),
+  _BuiltInMenuImageOption(
+    key: 'samosa',
+    label: 'Samosa',
+    icon: Icons.change_history_outlined,
+  ),
+  _BuiltInMenuImageOption(
+    key: 'paneer_tikka',
+    label: 'Paneer tikka',
+    icon: Icons.outdoor_grill_outlined,
+  ),
+  _BuiltInMenuImageOption(
+    key: 'fries',
+    label: 'French fries',
+    icon: Icons.fastfood_outlined,
+  ),
+  _BuiltInMenuImageOption(
+    key: 'spring_rolls',
+    label: 'Spring rolls',
     icon: Icons.tapas_outlined,
   ),
   _BuiltInMenuImageOption(
@@ -5892,6 +7097,21 @@ const _builtInMenuImageOptions = <_BuiltInMenuImageOption>[
     key: 'rice',
     label: 'Rice',
     icon: Icons.rice_bowl_outlined,
+  ),
+  _BuiltInMenuImageOption(
+    key: 'fried_rice',
+    label: 'Fried rice',
+    icon: Icons.rice_bowl_outlined,
+  ),
+  _BuiltInMenuImageOption(
+    key: 'naan',
+    label: 'Naan',
+    icon: Icons.flatware_outlined,
+  ),
+  _BuiltInMenuImageOption(
+    key: 'roti',
+    label: 'Roti',
+    icon: Icons.circle_outlined,
   ),
   _BuiltInMenuImageOption(
     key: 'sandwich',
@@ -5924,6 +7144,16 @@ const _builtInMenuImageOptions = <_BuiltInMenuImageOption>[
     icon: Icons.local_drink_outlined,
   ),
   _BuiltInMenuImageOption(
+    key: 'lassi',
+    label: 'Lassi',
+    icon: Icons.local_cafe_outlined,
+  ),
+  _BuiltInMenuImageOption(
+    key: 'lime_soda',
+    label: 'Lime soda',
+    icon: Icons.local_drink_outlined,
+  ),
+  _BuiltInMenuImageOption(
     key: 'mocktail',
     label: 'Mocktail',
     icon: Icons.wine_bar_outlined,
@@ -5934,9 +7164,19 @@ const _builtInMenuImageOptions = <_BuiltInMenuImageOption>[
     icon: Icons.cake_outlined,
   ),
   _BuiltInMenuImageOption(
+    key: 'gulab_jamun',
+    label: 'Gulab jamun',
+    icon: Icons.bubble_chart_outlined,
+  ),
+  _BuiltInMenuImageOption(
     key: 'ice_cream',
     label: 'Ice cream',
     icon: Icons.icecream_outlined,
+  ),
+  _BuiltInMenuImageOption(
+    key: 'brownie',
+    label: 'Brownie',
+    icon: Icons.cake_outlined,
   ),
   _BuiltInMenuImageOption(
     key: 'bakery',
@@ -6044,7 +7284,7 @@ class _ProductList extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 subtitle: Text(
-                  '${categoryNames[product.categoryId] ?? 'Uncategorised'} • ${product.isAvailable ? 'selling now' : 'sold out'} • ${_taxTreatmentLabel(product.taxTreatment)} • saved locally',
+                  '${categoryNames[product.categoryId] ?? 'Uncategorised'} • ${product.isAvailable ? 'selling now' : 'paused — not on POS'} • ${_taxTreatmentLabel(product.taxTreatment)} • saved locally',
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -6309,11 +7549,53 @@ class _ProductList extends StatelessWidget {
     if (update == null) {
       return;
     }
-    await onUpdateProductPrice(
+    final workspace = await onUpdateProductPrice(
       productId: product.productId,
       expectedRevision: product.revision,
       unitPriceMinor: update.unitPriceMinor,
       reason: update.reason,
+    );
+    if (!context.mounted || workspace == null) {
+      return;
+    }
+    // Price alone never puts a paused starter/import item on the counter.
+    // Offer resume immediately so owners are not left with an empty POS.
+    final updated = workspace.products
+        .where((entry) => entry.productId == product.productId)
+        .firstOrNull;
+    if (updated == null ||
+        updated.isAvailable ||
+        updated.unitPriceMinor <= 0 ||
+        workspace.storageStatus.contains('needs attention')) {
+      return;
+    }
+    final shouldResume = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Show this item on the counter?'),
+        content: const Text(
+          'The price is saved, but this item is still paused. POS only shows items that are resumed for selling.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep paused'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Resume selling'),
+          ),
+        ],
+      ),
+    );
+    if (shouldResume != true || !context.mounted) {
+      return;
+    }
+    await onSetProductAvailability(
+      productId: updated.productId,
+      expectedRevision: updated.revision,
+      isAvailable: true,
+      reason: 'Price reviewed; ready for counter',
     );
   }
 
@@ -6420,6 +7702,7 @@ class _ModifierOptionsSheetState extends State<_ModifierOptionsSheet> {
                         enabled: !_isSubmitting,
                         maxLength: 120,
                         textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.next,
                         decoration: const InputDecoration(
                           labelText: 'Modifier name',
                           hintText: 'e.g. Extra cheese',
@@ -6440,6 +7723,12 @@ class _ModifierOptionsSheetState extends State<_ModifierOptionsSheet> {
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                         ],
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) {
+                          if (!_isSubmitting) {
+                            unawaited(_createModifier());
+                          }
+                        },
                         decoration: const InputDecoration(
                           labelText: 'Additional price',
                           hintText: '0.00 for included',
@@ -7260,6 +8549,7 @@ class _ExpenseLedgerSheetState extends State<_ExpenseLedgerSheet> {
                   controller: category,
                   autofocus: true,
                   textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(labelText: 'Category'),
                 ),
                 const SizedBox(height: 12),
@@ -7267,6 +8557,7 @@ class _ExpenseLedgerSheetState extends State<_ExpenseLedgerSheet> {
                   controller: description,
                   maxLength: 500,
                   textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
                     labelText: 'Description',
                     helperText: 'This cannot be changed or deleted later.',
@@ -7278,6 +8569,24 @@ class _ExpenseLedgerSheetState extends State<_ExpenseLedgerSheet> {
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    final amountMinor = parseInrPriceToMinorUnits(amount.text);
+                    if (category.text.trim().isEmpty ||
+                        description.text.trim().length < 3 ||
+                        amountMinor == null ||
+                        amountMinor <= 0) {
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(
+                      _ExpenseRequest(
+                        category: category.text.trim(),
+                        description: description.text.trim(),
+                        amountMinor: amountMinor,
+                        paymentMethod: paymentMethod,
+                      ),
+                    );
+                  },
                   decoration: const InputDecoration(labelText: 'Amount (₹)'),
                 ),
                 const SizedBox(height: 12),
@@ -7336,7 +8645,9 @@ class _ExpenseLedgerSheetState extends State<_ExpenseLedgerSheet> {
       paymentMethod: request.paymentMethod,
     );
     if (!mounted) return;
-    setState(() => _expenses = Future.value(expenses));
+    setState(() {
+      _expenses = Future.value(expenses);
+    });
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(expenses.storageStatus)));
@@ -7508,6 +8819,7 @@ class _StaffManagementSheetState extends State<_StaffManagementSheet> {
                     controller: name,
                     autofocus: true,
                     enabled: !_isSaving,
+                    textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(labelText: 'Staff name'),
                     validator: _required,
                   ),
@@ -7538,25 +8850,34 @@ class _StaffManagementSheetState extends State<_StaffManagementSheet> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
+                  _ObscurableTextFormField(
                     controller: pin,
                     enabled: !_isSaving,
-                    obscureText: true,
                     keyboardType: TextInputType.number,
                     maxLength: 12,
-                    decoration: const InputDecoration(
-                      labelText: 'First PIN',
-                      hintText: '6 to 12 digits',
-                    ),
+                    textInputAction: TextInputAction.next,
+                    labelText: 'First PIN',
+                    hintText: '6 to 12 digits',
                     validator: _pin,
                   ),
-                  TextFormField(
+                  _ObscurableTextFormField(
                     controller: confirmPin,
                     enabled: !_isSaving,
-                    obscureText: true,
                     keyboardType: TextInputType.number,
                     maxLength: 12,
-                    decoration: const InputDecoration(labelText: 'Confirm PIN'),
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) {
+                      if (formKey.currentState?.validate() ?? false) {
+                        Navigator.of(dialogContext).pop(
+                          _StaffCreateRequest(
+                            displayName: name.text,
+                            role: role,
+                            pin: pin.text,
+                          ),
+                        );
+                      }
+                    },
+                    labelText: 'Confirm PIN',
                     validator: (value) =>
                         value == pin.text ? null : 'PINs do not match',
                   ),
@@ -7611,23 +8932,26 @@ class _StaffManagementSheetState extends State<_StaffManagementSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextFormField(
+              _ObscurableTextFormField(
                 controller: pin,
-                obscureText: true,
                 keyboardType: TextInputType.number,
                 maxLength: 12,
-                decoration: const InputDecoration(
-                  labelText: 'New PIN',
-                  hintText: '6 to 12 digits',
-                ),
+                textInputAction: TextInputAction.next,
+                labelText: 'New PIN',
+                hintText: '6 to 12 digits',
                 validator: _pin,
               ),
-              TextFormField(
+              _ObscurableTextFormField(
                 controller: confirmPin,
-                obscureText: true,
                 keyboardType: TextInputType.number,
                 maxLength: 12,
-                decoration: const InputDecoration(labelText: 'Confirm new PIN'),
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) {
+                  if (formKey.currentState?.validate() ?? false) {
+                    Navigator.of(dialogContext).pop(pin.text);
+                  }
+                },
+                labelText: 'Confirm new PIN',
                 validator: (value) =>
                     value == pin.text ? null : 'PINs do not match',
               ),
@@ -7696,6 +9020,20 @@ class _StaffManagementSheetState extends State<_StaffManagementSheet> {
                   minLines: 2,
                   maxLines: 4,
                   textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) {
+                    if (role == staff.role) {
+                      return;
+                    }
+                    if (formKey.currentState?.validate() ?? false) {
+                      Navigator.of(dialogContext).pop(
+                        _StaffRoleChangeRequest(
+                          role: role,
+                          reason: reason.text.trim(),
+                        ),
+                      );
+                    }
+                  },
                   decoration: const InputDecoration(
                     labelText: 'Reason',
                     helperText:
@@ -7755,6 +9093,12 @@ class _StaffManagementSheetState extends State<_StaffManagementSheet> {
           controller: reason,
           autofocus: true,
           maxLength: 500,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) {
+            if (value.trim().length >= 3) {
+              Navigator.of(dialogContext).pop(value.trim());
+            }
+          },
           decoration: const InputDecoration(
             labelText: 'Reason',
             helperText: 'The staff record and history are retained.',
@@ -7856,33 +9200,31 @@ class _StaffManagementSheetState extends State<_StaffManagementSheet> {
                                   : () => _rotatePin(staff),
                               icon: const Icon(Icons.password_outlined),
                             )
-                          : Wrap(
-                              spacing: 2,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Change ${staff.displayName} role',
-                                  onPressed: _isSaving || !staff.active
-                                      ? null
-                                      : () => _changeRole(staff),
-                                  icon: const Icon(
-                                    Icons.manage_accounts_outlined,
-                                  ),
+                          : PopupMenuButton<String>(
+                              tooltip: 'Manage ${staff.displayName}',
+                              enabled: !_isSaving && staff.active,
+                              onSelected: (action) {
+                                switch (action) {
+                                  case 'role':
+                                    _changeRole(staff);
+                                  case 'pin':
+                                    _rotatePin(staff);
+                                  case 'revoke':
+                                    _revoke(staff);
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'role',
+                                  child: Text('Change role'),
                                 ),
-                                IconButton(
-                                  tooltip: 'Rotate ${staff.displayName} PIN',
-                                  onPressed: _isSaving || !staff.active
-                                      ? null
-                                      : () => _rotatePin(staff),
-                                  icon: const Icon(Icons.password_outlined),
+                                PopupMenuItem(
+                                  value: 'pin',
+                                  child: Text('Rotate PIN'),
                                 ),
-                                IconButton(
-                                  tooltip: 'Revoke ${staff.displayName}',
-                                  onPressed: _isSaving || !staff.active
-                                      ? null
-                                      : () => _revoke(staff),
-                                  icon: const Icon(
-                                    Icons.person_remove_outlined,
-                                  ),
+                                PopupMenuItem(
+                                  value: 'revoke',
+                                  child: Text('Revoke access'),
                                 ),
                               ],
                             ),
@@ -7922,11 +9264,14 @@ class _ReportsWorkspace extends StatefulWidget {
   const _ReportsWorkspace({
     required this.applicationSupportDirectory,
     this.activeStaffRole,
+    this.onRestaurantProfileChanged,
     super.key,
   });
 
   final String applicationSupportDirectory;
   final String? activeStaffRole;
+  final Future<void> Function(CommunityRestaurantProfileRegistry registry)?
+  onRestaurantProfileChanged;
 
   @override
   State<_ReportsWorkspace> createState() => _ReportsWorkspaceState();
@@ -7940,6 +9285,8 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
   var _isBackingUp = false;
   var _isVerifyingBackup = false;
   var _isRestoring = false;
+  var _isPortableBackingUp = false;
+  var _isPortableRestoring = false;
   var _isExportingFinancialCsv = false;
   var _isClosingDay = false;
 
@@ -8274,14 +9621,11 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  TextField(
+                  _ObscurableTextField(
                     controller: approverPinController,
-                    obscureText: true,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Approver PIN',
-                      helperText: 'Distinct from the requester session.',
-                    ),
+                    labelText: 'Approver PIN',
+                    helperText: 'Distinct from the requester session.',
                   ),
                 ],
               ),
@@ -8388,6 +9732,336 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
               ? '${result.storageStatus} • checksum ${checksum.substring(0, 12)}…'
               : result.storageStatus,
         ),
+      ),
+    );
+  }
+
+  Future<void> _createPortableRecoveryKit() async {
+    if (_isPortableBackingUp || !_canManageStaff) return;
+    final passphraseController = TextEditingController();
+    final confirmController = TextEditingController();
+    try {
+      final passphrase = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Create portable recovery kit'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Creates a verified portable backup plus a .rosrecovery envelope under portable-backups. Copy both files off this device. Use the same recovery passphrase created at Owner setup, or another 24–64 character passphrase you will keep with the kit.',
+              ),
+              const SizedBox(height: 12),
+              _ObscurableTextField(
+                controller: passphraseController,
+                maxLength: 64,
+                labelText: 'Recovery passphrase',
+                hintText: '24 to 64 characters',
+              ),
+              const SizedBox(height: 8),
+              _ObscurableTextField(
+                controller: confirmController,
+                maxLength: 64,
+                labelText: 'Confirm recovery passphrase',
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = passphraseController.text;
+                if (value.length < 24 ||
+                    value.length > 64 ||
+                    value != confirmController.text) {
+                  return;
+                }
+                Navigator.of(dialogContext).pop(value);
+              },
+              child: const Text('Create kit'),
+            ),
+          ],
+        ),
+      );
+      if (passphrase == null || !mounted) return;
+      setState(() => _isPortableBackingUp = true);
+      final result = await createCommunityPortableBackup(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+        recoveryPassphrase: passphrase,
+      );
+      if (!mounted) return;
+      setState(() => _isPortableBackingUp = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.created &&
+                    result.backupFileName != null &&
+                    result.envelopeFileName != null
+                ? '${result.storageStatus} • ${result.backupFileName} + ${result.envelopeFileName}'
+                : result.storageStatus,
+          ),
+        ),
+      );
+    } finally {
+      passphraseController.dispose();
+      confirmController.dispose();
+    }
+  }
+
+  Future<void> _restorePortableRecoveryKit() async {
+    if (_isPortableRestoring || !_canManageStaff) return;
+    final passphraseController = TextEditingController();
+    final labelController = TextEditingController(text: 'Restored restaurant');
+    String? backupPath;
+    String? envelopePath;
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Restore portable recovery kit'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Restores into a new restaurant profile on this device. Live data and other profiles are left alone.',
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final result = await FilePicker.pickFiles(
+                        type: FileType.any,
+                        allowMultiple: false,
+                      );
+                      final path = result?.files.single.path;
+                      if (path != null) {
+                        setDialogState(() => backupPath = path);
+                      }
+                    },
+                    icon: const Icon(Icons.folder_open_outlined),
+                    label: Text(
+                      backupPath == null
+                          ? 'Choose backup file'
+                          : 'Backup: ${backupPath!.split(RegExp(r'[\\/]')).last}',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final result = await FilePicker.pickFiles(
+                        type: FileType.any,
+                        allowMultiple: false,
+                      );
+                      final path = result?.files.single.path;
+                      if (path != null) {
+                        setDialogState(() => envelopePath = path);
+                      }
+                    },
+                    icon: const Icon(Icons.description_outlined),
+                    label: Text(
+                      envelopePath == null
+                          ? 'Choose recovery envelope'
+                          : 'Envelope: ${envelopePath!.split(RegExp(r'[\\/]')).last}',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: labelController,
+                    decoration: const InputDecoration(
+                      labelText: 'Restaurant label',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _ObscurableTextField(
+                    controller: passphraseController,
+                    maxLength: 64,
+                    labelText: 'Recovery passphrase',
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final passphrase = passphraseController.text;
+                  if (backupPath == null ||
+                      envelopePath == null ||
+                      passphrase.length < 24 ||
+                      passphrase.length > 64) {
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(true);
+                },
+                child: const Text('Restore'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (confirmed != true ||
+          backupPath == null ||
+          envelopePath == null ||
+          !mounted) {
+        return;
+      }
+      setState(() => _isPortableRestoring = true);
+      final label = labelController.text.trim();
+      final registry = await restoreCommunityPortableBackup(
+        applicationSupportDirectory: widget.applicationSupportDirectory,
+        backupFilePath: backupPath!,
+        envelopeFilePath: envelopePath!,
+        recoveryPassphrase: passphraseController.text,
+        profileLabel: label.isEmpty ? 'Restored restaurant' : label,
+      );
+      if (!mounted) return;
+      setState(() => _isPortableRestoring = false);
+      final onChanged = widget.onRestaurantProfileChanged;
+      if (onChanged != null && registry.available) {
+        await onChanged(registry);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(registry.storageStatus)),
+        );
+      }
+    } finally {
+      passphraseController.dispose();
+      labelController.dispose();
+      if (mounted && _isPortableRestoring) {
+        setState(() => _isPortableRestoring = false);
+      }
+    }
+  }
+
+  Future<void> _manageRestaurantProfiles() async {
+    if (!_canManageStaff) return;
+    final registry = await listCommunityRestaurantProfiles(
+      applicationSupportDirectory: widget.applicationSupportDirectory,
+    );
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restaurant history'),
+        content: SizedBox(
+          width: 420,
+          child: registry.available
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(registry.storageStatus),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Edition: ${registry.edition ?? '—'} • Device: ${registry.deviceRole ?? '—'}',
+                    ),
+                    const SizedBox(height: 12),
+                    for (final profile in registry.profiles)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(profile.label),
+                        subtitle: Text(
+                          profile.isActive
+                              ? 'Active • ${profile.createdAtUtc}'
+                              : profile.createdAtUtc,
+                        ),
+                        trailing: profile.isActive
+                            ? const Icon(Icons.check_circle_outline)
+                            : TextButton(
+                                onPressed: () async {
+                                  Navigator.of(dialogContext).pop();
+                                  final activated =
+                                      await activateCommunityRestaurantProfile(
+                                        applicationSupportDirectory:
+                                            widget.applicationSupportDirectory,
+                                        profileId: profile.profileId,
+                                      );
+                                  if (!mounted) return;
+                                  final onChanged =
+                                      widget.onRestaurantProfileChanged;
+                                  if (onChanged != null &&
+                                      activated.available) {
+                                    await onChanged(activated);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(activated.storageStatus),
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: const Text('Open'),
+                              ),
+                      ),
+                  ],
+                )
+              : Text(registry.storageStatus),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              final labelController = TextEditingController();
+              try {
+                final label = await showDialog<String>(
+                  context: context,
+                  builder: (createContext) => AlertDialog(
+                    title: const Text('Start a new restaurant'),
+                    content: TextField(
+                      controller: labelController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Restaurant label',
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(createContext).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(
+                          createContext,
+                        ).pop(labelController.text.trim()),
+                        child: const Text('Start new'),
+                      ),
+                    ],
+                  ),
+                );
+                if (label == null || !mounted) return;
+                final created = await startNewCommunityRestaurantProfile(
+                  applicationSupportDirectory:
+                      widget.applicationSupportDirectory,
+                  label: label.isEmpty ? 'New restaurant' : label,
+                );
+                if (!mounted) return;
+                final onChanged = widget.onRestaurantProfileChanged;
+                if (onChanged != null && created.available) {
+                  await onChanged(created);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(created.storageStatus)),
+                  );
+                }
+              } finally {
+                labelController.dispose();
+              }
+            },
+            child: const Text('Start new'),
+          ),
+        ],
       ),
     );
   }
@@ -8665,13 +10339,10 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    TextField(
+                    _ObscurableTextField(
                       controller: approverPinController,
-                      obscureText: true,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Approver PIN',
-                      ),
+                      labelText: 'Approver PIN',
                     ),
                   ],
                 ),
@@ -8828,8 +10499,8 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
         final summary = snapshot.data;
         if (summary == null || !summary.available) {
           return _FeatureCanvas(
-            icon: Icons.insights_outlined,
-            title: 'Reports need attention',
+            icon: Icons.more_horiz,
+            title: 'More needs attention',
             description:
                 summary?.storageStatus ??
                 'The encrypted local report could not be loaded.',
@@ -8839,188 +10510,27 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
         return ListView(
           padding: const EdgeInsets.all(28),
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Local Sales Report',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'UTC day ${summary.accountingDateUtc ?? '—'} • ${summary.branchTimeZone ?? 'local zone'} display • offline source of truth',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      if (summary.dayClosed) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          'Day closed ${formatBranchLocalTimestamp(summary.dayClosedAtUtc ?? '', summary.branchTimeZone)}${summary.dayCloseReason == null ? '' : ' • ${summary.dayCloseReason}'}',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  flex: 2,
-                  child: Align(
-                    alignment: AlignmentDirectional.topEnd,
-                    child: Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 2,
-                      runSpacing: 2,
-                      children: [
-                        IconButton(
-                          tooltip: 'Choose UTC accounting day',
-                          onPressed: _pickAccountingDay,
-                          icon: const Icon(Icons.calendar_today_outlined),
-                        ),
-                        IconButton(
-                          tooltip: summary.dayClosed
-                              ? 'This UTC day is already closed'
-                              : 'Close UTC accounting day',
-                          onPressed:
-                              !_canManageFinancials ||
-                                  _isClosingDay ||
-                                  summary.dayClosed
-                              ? null
-                              : () => _closeAccountingDay(summary),
-                          icon: _isClosingDay
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Icon(
-                                  summary.dayClosed
-                                      ? Icons.lock_outline
-                                      : Icons.event_available_outlined,
-                                ),
-                        ),
-                        IconButton(
-                          tooltip: 'Export verified financial CSV',
-                          onPressed:
-                              !_canExportFinancialCsv ||
-                                  _isExportingFinancialCsv
-                              ? null
-                              : _exportVerifiedFinancialCsv,
-                          icon: _isExportingFinancialCsv
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.file_download_outlined),
-                        ),
-                        IconButton(
-                          tooltip: 'Create verified local backup',
-                          onPressed: !_canManageStaff || _isBackingUp
-                              ? null
-                              : _createVerifiedBackup,
-                          icon: _isBackingUp
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.backup_outlined),
-                        ),
-                        IconButton(
-                          tooltip: 'Verify local backup integrity',
-                          onPressed: !_canManageStaff || _isVerifyingBackup
-                              ? null
-                              : _verifyLocalBackup,
-                          icon: _isVerifyingBackup
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.verified_user_outlined),
-                        ),
-                        IconButton(
-                          tooltip: 'Restore verified backup beside live data',
-                          onPressed: !_canManageStaff || _isRestoring
-                              ? null
-                              : _restoreVerifiedBackup,
-                          icon: _isRestoring
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.settings_backup_restore),
-                        ),
-                        IconButton(
-                          tooltip: 'Manage local staff',
-                          onPressed: _canManageStaff ? _openStaffManager : null,
-                          icon: const Icon(Icons.manage_accounts_outlined),
-                        ),
-                        IconButton(
-                          tooltip: 'Local diagnostics and voluntary share',
-                          onPressed: _canManageStaff ? _openDiagnostics : null,
-                          icon: const Icon(Icons.bug_report_outlined),
-                        ),
-                        IconButton(
-                          tooltip: 'View verified audit history',
-                          onPressed: _canManageStaff
-                              ? () => _viewAuditHistory(summary.branchTimeZone)
-                              : null,
-                          icon: const Icon(Icons.history_outlined),
-                        ),
-                        IconButton(
-                          tooltip: 'View local sync queue',
-                          onPressed: _canManageStaff
-                              ? () => _viewSyncQueue(summary.branchTimeZone)
-                              : null,
-                          icon: const Icon(Icons.cloud_sync_outlined),
-                        ),
-                        IconButton(
-                          tooltip: 'Open expense ledger',
-                          onPressed: _canManageFinancials
-                              ? () => _openExpenseLedger(summary.branchTimeZone)
-                              : null,
-                          icon: const Icon(Icons.receipt_long_outlined),
-                        ),
-                        IconButton(
-                          tooltip: 'View cash drawer',
-                          onPressed: _canManageFinancials
-                              ? _showCashDrawer
-                              : null,
-                          icon: const Icon(Icons.point_of_sale_outlined),
-                        ),
-                        IconButton(
-                          tooltip: 'Refresh local report',
-                          onPressed: () => setState(() => _summary = _load()),
-                          icon: const Icon(Icons.refresh),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              'Local Sales Report',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
             ),
+            const SizedBox(height: 6),
+            Text(
+              'UTC day ${summary.accountingDateUtc ?? '—'} • ${summary.branchTimeZone ?? 'local zone'} display • offline source of truth',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            if (summary.dayClosed) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Day closed ${formatBranchLocalTimestamp(summary.dayClosedAtUtc ?? '', summary.branchTimeZone)}${summary.dayCloseReason == null ? '' : ' • ${summary.dayCloseReason}'}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             const SizedBox(height: 22),
             _ReportMetricCard(
               label: 'Finalized sales',
@@ -9077,6 +10587,198 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                   detail: 'Recorded operating expenses',
                 ),
               ],
+            ),
+            const SizedBox(height: 28),
+            Text(
+              'Day & export',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            Card(
+              child: Column(
+                children: [
+                  _MoreActionTile(
+                    icon: Icons.calendar_today_outlined,
+                    title: 'Choose UTC accounting day',
+                    subtitle: 'Pick which offline day this report covers',
+                    onTap: _pickAccountingDay,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: summary.dayClosed
+                        ? Icons.lock_outline
+                        : Icons.event_available_outlined,
+                    title: summary.dayClosed
+                        ? 'UTC accounting day is closed'
+                        : 'Close UTC accounting day',
+                    subtitle: summary.dayClosed
+                        ? 'This day is locked for further close actions'
+                        : 'Lock the current UTC day after service',
+                    busy: _isClosingDay,
+                    onTap:
+                        !_canManageFinancials ||
+                            _isClosingDay ||
+                            summary.dayClosed
+                        ? null
+                        : () => _closeAccountingDay(summary),
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.file_download_outlined,
+                    title: 'Export verified financial CSV',
+                    subtitle: 'Download the trusted local totals for this day',
+                    busy: _isExportingFinancialCsv,
+                    onTap:
+                        !_canExportFinancialCsv || _isExportingFinancialCsv
+                        ? null
+                        : _exportVerifiedFinancialCsv,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.refresh,
+                    title: 'Refresh local report',
+                    subtitle: 'Reload totals from encrypted local storage',
+                    onTap: () {
+                      setState(() {
+                        _summary = _load();
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+            Text(
+              'Backup & recovery',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            Card(
+              child: Column(
+                children: [
+                  _MoreActionTile(
+                    icon: Icons.backup_outlined,
+                    title: 'Create verified local backup',
+                    subtitle: 'Write a checked backup beside live data',
+                    busy: _isBackingUp,
+                    onTap: !_canManageStaff || _isBackingUp
+                        ? null
+                        : _createVerifiedBackup,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.verified_user_outlined,
+                    title: 'Verify local backup integrity',
+                    subtitle: 'Confirm a backup pack is still readable',
+                    busy: _isVerifyingBackup,
+                    onTap: !_canManageStaff || _isVerifyingBackup
+                        ? null
+                        : _verifyLocalBackup,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.settings_backup_restore,
+                    title: 'Restore verified backup',
+                    subtitle: 'Restore beside live data without overwriting quietly',
+                    busy: _isRestoring,
+                    onTap: !_canManageStaff || _isRestoring
+                        ? null
+                        : _restoreVerifiedBackup,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.travel_explore_outlined,
+                    title: 'Create portable recovery kit',
+                    subtitle: 'Export backup + passphrase envelope for a new device',
+                    busy: _isPortableBackingUp,
+                    onTap: !_canManageStaff || _isPortableBackingUp
+                        ? null
+                        : _createPortableRecoveryKit,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.unarchive_outlined,
+                    title: 'Restore portable recovery kit',
+                    subtitle: 'Import into a new restaurant profile on this device',
+                    busy: _isPortableRestoring,
+                    onTap: !_canManageStaff || _isPortableRestoring
+                        ? null
+                        : _restorePortableRecoveryKit,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.history_edu_outlined,
+                    title: 'Restaurant history',
+                    subtitle: 'Open an old profile or start a new empty restaurant',
+                    onTap: !_canManageStaff ? null : _manageRestaurantProfiles,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+            Text(
+              'Team, ledgers & diagnostics',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            Card(
+              child: Column(
+                children: [
+                  _MoreActionTile(
+                    icon: Icons.manage_accounts_outlined,
+                    title: 'Manage local staff',
+                    subtitle: 'Team members, roles, and PIN rotation',
+                    onTap: _canManageStaff ? _openStaffManager : null,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Open expense ledger',
+                    subtitle: 'Record and review operating expenses',
+                    onTap: _canManageFinancials
+                        ? () => _openExpenseLedger(summary.branchTimeZone)
+                        : null,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.point_of_sale_outlined,
+                    title: 'View cash drawer',
+                    subtitle: 'Cash in and out retained on this device',
+                    onTap: _canManageFinancials ? _showCashDrawer : null,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.history_outlined,
+                    title: 'View verified audit history',
+                    subtitle: 'Immutable local event trail',
+                    onTap: _canManageStaff
+                        ? () => _viewAuditHistory(summary.branchTimeZone)
+                        : null,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.cloud_sync_outlined,
+                    title: 'View local sync queue',
+                    subtitle: 'Pending and retained sync operations',
+                    onTap: _canManageStaff
+                        ? () => _viewSyncQueue(summary.branchTimeZone)
+                        : null,
+                  ),
+                  const Divider(height: 1),
+                  _MoreActionTile(
+                    icon: Icons.bug_report_outlined,
+                    title: 'Local diagnostics',
+                    subtitle: 'Export or voluntarily share a diagnostics pack',
+                    onTap: _canManageStaff ? _openDiagnostics : null,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 22),
             Text(
@@ -9161,9 +10863,8 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                             subtitle: Text(
                               '${summary.recentInvoices[index].paymentMethod.toUpperCase()} • ${formatBranchLocalTimestamp(summary.recentInvoices[index].finalizedAtUtc, summary.branchTimeZone)}',
                             ),
-                            trailing: Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 8,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   _formatMinorCurrency(
@@ -9174,32 +10875,44 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                                IconButton(
-                                  tooltip: 'View immutable receipt',
-                                  onPressed: () => _viewInvoice(
-                                    summary.recentInvoices[index],
-                                    branchTimeZone: summary.branchTimeZone,
-                                  ),
-                                  icon: const Icon(Icons.visibility_outlined),
-                                ),
-                                IconButton(
-                                  tooltip: 'Record refund',
-                                  onPressed:
-                                      !_canManageFinancials || _isRefunding
-                                      ? null
-                                      : () => _requestRefund(
-                                          summary.recentInvoices[index],
-                                        ),
-                                  icon: const Icon(Icons.undo_outlined),
-                                ),
-                                IconButton(
-                                  tooltip: 'Void invoice',
-                                  onPressed: !_canManageFinancials || _isVoiding
-                                      ? null
-                                      : () => _requestVoid(
-                                          summary.recentInvoices[index],
-                                        ),
-                                  icon: const Icon(Icons.block_outlined),
+                                PopupMenuButton<String>(
+                                  tooltip:
+                                      'Manage invoice #${summary.recentInvoices[index].invoiceNumber}',
+                                  onSelected: (action) {
+                                    final invoice =
+                                        summary.recentInvoices[index];
+                                    switch (action) {
+                                      case 'view':
+                                        _viewInvoice(
+                                          invoice,
+                                          branchTimeZone:
+                                              summary.branchTimeZone,
+                                        );
+                                      case 'refund':
+                                        _requestRefund(invoice);
+                                      case 'void':
+                                        _requestVoid(invoice);
+                                    }
+                                  },
+                                  itemBuilder: (context) => [
+                                    const PopupMenuItem(
+                                      value: 'view',
+                                      child: Text('View receipt'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'refund',
+                                      enabled:
+                                          _canManageFinancials &&
+                                          !_isRefunding,
+                                      child: const Text('Record refund'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'void',
+                                      enabled:
+                                          _canManageFinancials && !_isVoiding,
+                                      child: const Text('Void invoice'),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -9365,7 +11078,9 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(upload.status)));
-      setState(() => _workspace = _load());
+      setState(() {
+        _workspace = _load();
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -9408,7 +11123,9 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
           ),
         ),
       );
-      setState(() => _workspace = _load());
+      setState(() {
+        _workspace = _load();
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -9459,26 +11176,28 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: _busy ? null : _exportPack,
-                      icon: const Icon(Icons.save_alt_outlined),
-                      label: const Text('Export pack'),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: _busy ? null : _sharePack,
-                      icon: const Icon(Icons.cloud_upload_outlined),
-                      label: const Text('Share with Gotigin'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : _clearLocal,
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Clear local'),
-                    ),
-                  ],
+                InteractiveChrome(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: _busy ? null : _exportPack,
+                        icon: const Icon(Icons.save_alt_outlined),
+                        label: const Text('Export pack'),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: _busy ? null : _sharePack,
+                        icon: const Icon(Icons.cloud_upload_outlined),
+                        label: const Text('Share with Gotigin'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _clearLocal,
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Clear local'),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 18),
                 Text(
@@ -9645,6 +11364,43 @@ class _SyncQueueSheet extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MoreActionTile extends StatelessWidget {
+  const _MoreActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null && !busy;
+    return ListTile(
+      enabled: enabled,
+      leading: busy
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(icon),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: enabled
+          ? const Icon(Icons.chevron_right)
+          : null,
+      onTap: enabled ? onTap : null,
     );
   }
 }

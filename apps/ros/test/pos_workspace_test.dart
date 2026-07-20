@@ -69,6 +69,100 @@ void main() {
     expect(find.text('Current order • 1 item'), findsOneWidget);
   });
 
+  testWidgets('keeps every category tab reachable by horizontal scrolling', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(720, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const categories = <CommunityCategoryView>[
+      CommunityCategoryView(
+        categoryId: 'c-beverages',
+        displayName: 'Beverages',
+        revision: 1,
+      ),
+      CommunityCategoryView(
+        categoryId: 'c-breakfast',
+        displayName: 'Breakfast',
+        revision: 1,
+      ),
+      CommunityCategoryView(
+        categoryId: 'c-starters',
+        displayName: 'Snacks & Starters',
+        revision: 1,
+      ),
+      CommunityCategoryView(
+        categoryId: 'c-mains',
+        displayName: 'Main Course',
+        revision: 1,
+      ),
+      CommunityCategoryView(
+        categoryId: 'c-breads',
+        displayName: 'Breads',
+        revision: 1,
+      ),
+      CommunityCategoryView(
+        categoryId: 'c-rice',
+        displayName: 'Rice & Biryani',
+        revision: 1,
+      ),
+      CommunityCategoryView(
+        categoryId: 'c-desserts',
+        displayName: 'Desserts',
+        revision: 1,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _CounterHarness(
+        workspace: CommunityWorkspace(
+          storageStatus: 'Saved locally • encrypted database ready',
+          setupRequired: false,
+          branchName: 'Koramangala',
+          categories: categories,
+          customers: const [],
+          openDrafts: const [],
+          kitchenTickets: const [],
+          products: [
+            for (final category in categories)
+              CommunityProductView(
+                productId: 'p-${category.categoryId}',
+                categoryId: category.categoryId,
+                displayName: '${category.displayName} item',
+                unitPriceMinor: 1000,
+                currencyCode: 'INR',
+                revision: 1,
+                isAvailable: true,
+                taxTreatment: 'no_tax',
+                modifierOptions: const [],
+              ),
+          ],
+        ),
+        onCheckout: (request) async =>
+            const PosCheckoutResult(recorded: false, status: 'Unused'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('All items'), findsOneWidget);
+    expect(find.text('Beverages'), findsOneWidget);
+    expect(find.byType(TabBar), findsOneWidget);
+    expect(find.byKey(const Key('pos-category-scroll-left')), findsOneWidget);
+    expect(find.byKey(const Key('pos-category-scroll-right')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('pos-category-scroll-right')));
+    await tester.pumpAndSettle();
+    expect(find.text('Beverages item'), findsOneWidget);
+
+    final desserts = find.text('Desserts');
+    await tester.ensureVisible(desserts);
+    await tester.pumpAndSettle();
+    expect(desserts, findsOneWidget);
+    await tester.tap(desserts);
+    await tester.pumpAndSettle();
+    expect(find.text('Desserts item'), findsOneWidget);
+  });
+
   testWidgets(
     'keeps critical counter controls large and announces cart quantities',
     (tester) async {
@@ -439,7 +533,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('pos-add-$_productId')), findsNothing);
-    expect(find.text('No matching menu items'), findsOneWidget);
+    expect(find.text('No items are ready to sell yet'), findsOneWidget);
+    expect(
+      find.textContaining('Resume selling'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('sends exact split-tender allocations to the trusted checkout', (
@@ -976,12 +1074,41 @@ class _CounterHarness extends StatelessWidget {
     this.onSaveDraft,
     this.onSendToKitchen,
     this.textScaler,
+    this.workspace = const CommunityWorkspace(
+      storageStatus: 'Saved locally • encrypted database ready',
+      setupRequired: false,
+      branchName: 'Koramangala',
+      categories: <CommunityCategoryView>[
+        CommunityCategoryView(
+          categoryId: '0197d918-7e11-7000-8000-000000000001',
+          displayName: 'Hot drinks',
+          revision: 1,
+        ),
+      ],
+      customers: <CommunityCustomerView>[],
+      openDrafts: <CommunityDraftOrderView>[],
+      kitchenTickets: <CommunityKitchenTicketView>[],
+      products: <CommunityProductView>[
+        CommunityProductView(
+          productId: _productId,
+          categoryId: '0197d918-7e11-7000-8000-000000000001',
+          displayName: 'Masala chai',
+          unitPriceMinor: 2_500,
+          currencyCode: 'INR',
+          revision: 1,
+          isAvailable: true,
+          taxTreatment: 'no_tax',
+          modifierOptions: <CommunityModifierOptionView>[],
+        ),
+      ],
+    ),
   });
 
   final PersistPosCheckout onCheckout;
   final PersistPosDraft? onSaveDraft;
   final SendPosDraftToKitchen? onSendToKitchen;
   final TextScaler? textScaler;
+  final CommunityWorkspace workspace;
 
   @override
   Widget build(BuildContext context) {
@@ -995,34 +1122,7 @@ class _CounterHarness extends StatelessWidget {
             ),
       home: Scaffold(
         body: PosWorkspace(
-          workspace: const CommunityWorkspace(
-            storageStatus: 'Saved locally • encrypted database ready',
-            setupRequired: false,
-            branchName: 'Koramangala',
-            categories: <CommunityCategoryView>[
-              CommunityCategoryView(
-                categoryId: '0197d918-7e11-7000-8000-000000000001',
-                displayName: 'Hot drinks',
-                revision: 1,
-              ),
-            ],
-            customers: <CommunityCustomerView>[],
-            openDrafts: <CommunityDraftOrderView>[],
-            kitchenTickets: <CommunityKitchenTicketView>[],
-            products: <CommunityProductView>[
-              CommunityProductView(
-                productId: _productId,
-                categoryId: '0197d918-7e11-7000-8000-000000000001',
-                displayName: 'Masala chai',
-                unitPriceMinor: 2_500,
-                currencyCode: 'INR',
-                revision: 1,
-                isAvailable: true,
-                taxTreatment: 'no_tax',
-                modifierOptions: <CommunityModifierOptionView>[],
-              ),
-            ],
-          ),
+          workspace: workspace,
           isSaving: false,
           onPreviewPricing: _stubPreviewPricing,
           onCheckout: onCheckout,

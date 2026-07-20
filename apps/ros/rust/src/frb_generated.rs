@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -817971592;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 215206877;
 
 // Section: executor
 
@@ -77,6 +77,45 @@ fn wire__crate__api__simple__acknowledge_community_kitchen_ticket_cancellation_i
                         crate::api::simple::acknowledge_community_kitchen_ticket_cancellation(
                             api_application_support_directory,
                             api_ticket_id,
+                        ),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__simple__activate_community_restaurant_profile_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "activate_community_restaurant_profile",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_application_support_directory = <String>::sse_decode(&mut deserializer);
+            let api_profile_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::simple::activate_community_restaurant_profile(
+                            api_application_support_directory,
+                            api_profile_id,
                         ),
                     )?;
                     Ok(output_ok)
@@ -824,6 +863,7 @@ fn wire__crate__api__simple__configure_community_owner_pin_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_application_support_directory = <String>::sse_decode(&mut deserializer);
             let api_pin = <String>::sse_decode(&mut deserializer);
+            let api_recovery_passphrase = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -831,6 +871,7 @@ fn wire__crate__api__simple__configure_community_owner_pin_impl(
                         Result::<_, ()>::Ok(crate::api::simple::configure_community_owner_pin(
                             api_application_support_directory,
                             api_pin,
+                            api_recovery_passphrase,
                         ))?;
                     Ok(output_ok)
                 })())
@@ -949,6 +990,44 @@ fn wire__crate__api__simple__create_community_local_backup_impl(
                     let output_ok =
                         Result::<_, ()>::Ok(crate::api::simple::create_community_local_backup(
                             api_application_support_directory,
+                        ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__simple__create_community_portable_backup_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "create_community_portable_backup",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_application_support_directory = <String>::sse_decode(&mut deserializer);
+            let api_recovery_passphrase = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::simple::create_community_portable_backup(
+                            api_application_support_directory,
+                            api_recovery_passphrase,
                         ))?;
                     Ok(output_ok)
                 })())
@@ -1274,6 +1353,43 @@ fn wire__crate__api__simple__init_app_impl(
                     let output_ok = Result::<_, ()>::Ok({
                         crate::api::simple::init_app();
                     })?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__simple__list_community_restaurant_profiles_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "list_community_restaurant_profiles",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_application_support_directory = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::simple::list_community_restaurant_profiles(
+                            api_application_support_directory,
+                        ),
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2108,6 +2224,46 @@ fn wire__crate__api__simple__record_community_inventory_movement_impl(
         },
     )
 }
+fn wire__crate__api__simple__recover_community_owner_pin_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "recover_community_owner_pin",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_application_support_directory = <String>::sse_decode(&mut deserializer);
+            let api_recovery_passphrase = <String>::sse_decode(&mut deserializer);
+            let api_new_owner_pin = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::simple::recover_community_owner_pin(
+                            api_application_support_directory,
+                            api_recovery_passphrase,
+                            api_new_owner_pin,
+                        ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__simple__refund_community_invoice_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2362,6 +2518,51 @@ fn wire__crate__api__simple__restore_community_local_backup_impl(
         },
     )
 }
+fn wire__crate__api__simple__restore_community_portable_backup_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "restore_community_portable_backup",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_application_support_directory = <String>::sse_decode(&mut deserializer);
+            let api_backup_file_path = <String>::sse_decode(&mut deserializer);
+            let api_envelope_file_path = <String>::sse_decode(&mut deserializer);
+            let api_recovery_passphrase = <String>::sse_decode(&mut deserializer);
+            let api_profile_label = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::simple::restore_community_portable_backup(
+                            api_application_support_directory,
+                            api_backup_file_path,
+                            api_envelope_file_path,
+                            api_recovery_passphrase,
+                            api_profile_label,
+                        ),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__simple__revise_community_customer_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2579,6 +2780,47 @@ fn wire__crate__api__simple__send_community_draft_to_kitchen_impl(
         },
     )
 }
+fn wire__crate__api__simple__set_community_edition_and_device_role_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_community_edition_and_device_role",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_application_support_directory = <String>::sse_decode(&mut deserializer);
+            let api_edition = <String>::sse_decode(&mut deserializer);
+            let api_device_role = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::simple::set_community_edition_and_device_role(
+                            api_application_support_directory,
+                            api_edition,
+                            api_device_role,
+                        ),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__simple__set_community_inventory_low_stock_threshold_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2702,6 +2944,45 @@ fn wire__crate__api__simple__set_community_product_tax_treatment_impl(
                             api_product_id,
                             api_tax_treatment,
                             api_expected_revision,
+                        ),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__simple__start_new_community_restaurant_profile_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "start_new_community_restaurant_profile",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_application_support_directory = <String>::sse_decode(&mut deserializer);
+            let api_label = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::simple::start_new_community_restaurant_profile(
+                            api_application_support_directory,
+                            api_label,
                         ),
                     )?;
                     Ok(output_ok)
@@ -3413,6 +3694,24 @@ impl SseDecode for crate::api::simple::CommunityPaymentAllocation {
     }
 }
 
+impl SseDecode for crate::api::simple::CommunityPortableBackupResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_storageStatus = <String>::sse_decode(deserializer);
+        let mut var_created = <bool>::sse_decode(deserializer);
+        let mut var_backupFileName = <Option<String>>::sse_decode(deserializer);
+        let mut var_envelopeFileName = <Option<String>>::sse_decode(deserializer);
+        let mut var_sha256 = <Option<String>>::sse_decode(deserializer);
+        return crate::api::simple::CommunityPortableBackupResult {
+            storage_status: var_storageStatus,
+            created: var_created,
+            backup_file_name: var_backupFileName,
+            envelope_file_name: var_envelopeFileName,
+            sha256: var_sha256,
+        };
+    }
+}
+
 impl SseDecode for crate::api::simple::CommunityProductView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3440,6 +3739,43 @@ impl SseDecode for crate::api::simple::CommunityProductView {
             image_asset_key: var_imageAssetKey,
             image_bytes: var_imageBytes,
             modifier_options: var_modifierOptions,
+        };
+    }
+}
+
+impl SseDecode for crate::api::simple::CommunityRestaurantProfileRegistry {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_storageStatus = <String>::sse_decode(deserializer);
+        let mut var_available = <bool>::sse_decode(deserializer);
+        let mut var_edition = <Option<String>>::sse_decode(deserializer);
+        let mut var_deviceRole = <Option<String>>::sse_decode(deserializer);
+        let mut var_activeProfileId = <Option<String>>::sse_decode(deserializer);
+        let mut var_profiles =
+            <Vec<crate::api::simple::CommunityRestaurantProfileView>>::sse_decode(deserializer);
+        return crate::api::simple::CommunityRestaurantProfileRegistry {
+            storage_status: var_storageStatus,
+            available: var_available,
+            edition: var_edition,
+            device_role: var_deviceRole,
+            active_profile_id: var_activeProfileId,
+            profiles: var_profiles,
+        };
+    }
+}
+
+impl SseDecode for crate::api::simple::CommunityRestaurantProfileView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_profileId = <String>::sse_decode(deserializer);
+        let mut var_label = <String>::sse_decode(deserializer);
+        let mut var_createdAtUtc = <String>::sse_decode(deserializer);
+        let mut var_isActive = <bool>::sse_decode(deserializer);
+        return crate::api::simple::CommunityRestaurantProfileView {
+            profile_id: var_profileId,
+            label: var_label,
+            created_at_utc: var_createdAtUtc,
+            is_active: var_isActive,
         };
     }
 }
@@ -3940,6 +4276,20 @@ impl SseDecode for Vec<crate::api::simple::CommunityProductView> {
     }
 }
 
+impl SseDecode for Vec<crate::api::simple::CommunityRestaurantProfileView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(
+                <crate::api::simple::CommunityRestaurantProfileView>::sse_decode(deserializer),
+            );
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::simple::CommunityStaffView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4098,392 +4448,434 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        2 => wire__crate__api__simple__advance_community_kitchen_ticket_impl(
+        2 => wire__crate__api__simple__activate_community_restaurant_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        3 => wire__crate__api__simple__anonymize_community_customer_impl(
+        3 => wire__crate__api__simple__advance_community_kitchen_ticket_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        4 => wire__crate__api__simple__archive_community_category_impl(
+        4 => wire__crate__api__simple__anonymize_community_customer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        5 => wire__crate__api__simple__archive_community_product_impl(
+        5 => wire__crate__api__simple__archive_community_category_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        6 => wire__crate__api__simple__archive_community_product_modifier_option_impl(
+        6 => wire__crate__api__simple__archive_community_product_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        7 => wire__crate__api__simple__archive_community_tax_rate_impl(
+        7 => wire__crate__api__simple__archive_community_product_modifier_option_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        8 => wire__crate__api__simple__bootstrap_local_storage_impl(
+        8 => wire__crate__api__simple__archive_community_tax_rate_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        9 => wire__crate__api__simple__cancel_community_open_draft_order_impl(
+        9 => wire__crate__api__simple__bootstrap_local_storage_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        10 => wire__crate__api__simple__cancel_community_sent_draft_order_impl(
+        10 => wire__crate__api__simple__cancel_community_open_draft_order_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        11 => wire__crate__api__simple__change_community_staff_role_impl(
+        11 => wire__crate__api__simple__cancel_community_sent_draft_order_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        12 => wire__crate__api__simple__clear_community_category_image_impl(
+        12 => wire__crate__api__simple__change_community_staff_role_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__simple__clear_community_diagnostics_impl(
+        13 => wire__crate__api__simple__clear_community_category_image_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        14 => wire__crate__api__simple__clear_community_inventory_low_stock_threshold_impl(
+        14 => wire__crate__api__simple__clear_community_diagnostics_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__simple__close_community_accounting_day_impl(
+        15 => wire__crate__api__simple__clear_community_inventory_low_stock_threshold_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        16 => wire__crate__api__simple__close_community_cash_drawer_impl(
+        16 => wire__crate__api__simple__close_community_accounting_day_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        17 => wire__crate__api__simple__complete_community_sale_impl(
+        17 => wire__crate__api__simple__close_community_cash_drawer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        18 => wire__crate__api__simple__complete_community_setup_impl(
+        18 => wire__crate__api__simple__complete_community_sale_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__simple__configure_community_owner_pin_impl(
+        19 => wire__crate__api__simple__complete_community_setup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__simple__create_community_category_impl(
+        20 => wire__crate__api__simple__configure_community_owner_pin_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        21 => wire__crate__api__simple__create_community_customer_impl(
+        21 => wire__crate__api__simple__create_community_category_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__simple__create_community_local_backup_impl(
+        22 => wire__crate__api__simple__create_community_customer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__simple__create_community_product_impl(
+        23 => wire__crate__api__simple__create_community_local_backup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__simple__create_community_product_modifier_option_impl(
+        24 => wire__crate__api__simple__create_community_portable_backup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => {
+        25 => wire__crate__api__simple__create_community_product_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        26 => wire__crate__api__simple__create_community_product_modifier_option_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        27 => {
             wire__crate__api__simple__create_community_staff_impl(port, ptr, rust_vec_len, data_len)
         }
-        26 => wire__crate__api__simple__create_community_tax_rate_impl(
+        28 => wire__crate__api__simple__create_community_tax_rate_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => wire__crate__api__simple__delete_unused_community_product_impl(
+        29 => wire__crate__api__simple__delete_unused_community_product_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => wire__crate__api__simple__export_community_diagnostics_pack_impl(
+        30 => wire__crate__api__simple__export_community_diagnostics_pack_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__simple__import_common_starter_menu_impl(
+        31 => wire__crate__api__simple__import_common_starter_menu_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__simple__list_community_tax_rates_impl(
+        32 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__simple__list_community_restaurant_profiles_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__simple__load_community_audit_timeline_impl(
+        34 => wire__crate__api__simple__list_community_tax_rates_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__simple__load_community_diagnostics_impl(
+        35 => wire__crate__api__simple__load_community_audit_timeline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__simple__load_community_expenses_impl(
+        36 => wire__crate__api__simple__load_community_diagnostics_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__simple__load_community_inventory_impl(
+        37 => wire__crate__api__simple__load_community_expenses_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__simple__load_community_invoice_detail_impl(
+        38 => wire__crate__api__simple__load_community_inventory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__simple__load_community_open_cash_drawer_impl(
+        39 => wire__crate__api__simple__load_community_invoice_detail_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__simple__load_community_sales_summary_impl(
+        40 => wire__crate__api__simple__load_community_open_cash_drawer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__simple__load_community_staff_security_impl(
+        41 => wire__crate__api__simple__load_community_sales_summary_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__api__simple__load_community_sync_queue_impl(
+        42 => wire__crate__api__simple__load_community_staff_security_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__simple__load_community_workspace_impl(
+        43 => wire__crate__api__simple__load_community_sync_queue_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => {
+        44 => wire__crate__api__simple__load_community_workspace_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        46 => {
             wire__crate__api__simple__lock_community_staff_impl(port, ptr, rust_vec_len, data_len)
         }
-        44 => wire__crate__api__simple__open_community_cash_drawer_impl(
+        47 => wire__crate__api__simple__open_community_cash_drawer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__simple__prepare_community_diagnostics_share_impl(
+        48 => wire__crate__api__simple__prepare_community_diagnostics_share_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => wire__crate__api__simple__prepare_community_financial_csv_impl(
+        49 => wire__crate__api__simple__prepare_community_financial_csv_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__simple__prepare_community_menu_image_impl(
+        50 => wire__crate__api__simple__prepare_community_menu_image_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => wire__crate__api__simple__preview_community_sale_pricing_impl(
+        51 => wire__crate__api__simple__preview_community_sale_pricing_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__api__simple__record_community_diagnostic_breadcrumb_impl(
+        52 => wire__crate__api__simple__record_community_diagnostic_breadcrumb_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__simple__record_community_diagnostics_share_outcome_impl(
+        53 => wire__crate__api__simple__record_community_diagnostics_share_outcome_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        51 => wire__crate__api__simple__record_community_expense_impl(
+        54 => wire__crate__api__simple__record_community_expense_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__api__simple__record_community_inventory_movement_impl(
+        55 => wire__crate__api__simple__record_community_inventory_movement_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__simple__refund_community_invoice_impl(
+        56 => wire__crate__api__simple__recover_community_owner_pin_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => wire__crate__api__simple__reopen_community_sent_draft_order_impl(
+        57 => wire__crate__api__simple__refund_community_invoice_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__api__simple__replace_community_category_image_impl(
+        58 => wire__crate__api__simple__reopen_community_sent_draft_order_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__api__simple__replace_community_product_image_impl(
+        59 => wire__crate__api__simple__replace_community_category_image_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => wire__crate__api__simple__reset_community_storage_for_fresh_setup_impl(
+        60 => wire__crate__api__simple__replace_community_product_image_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__api__simple__restore_community_local_backup_impl(
+        61 => wire__crate__api__simple__reset_community_storage_for_fresh_setup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        59 => wire__crate__api__simple__revise_community_customer_impl(
+        62 => wire__crate__api__simple__restore_community_local_backup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => {
+        63 => wire__crate__api__simple__restore_community_portable_backup_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        64 => wire__crate__api__simple__revise_community_customer_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        65 => {
             wire__crate__api__simple__revoke_community_staff_impl(port, ptr, rust_vec_len, data_len)
         }
-        61 => wire__crate__api__simple__rotate_community_staff_pin_impl(
+        66 => wire__crate__api__simple__rotate_community_staff_pin_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__api__simple__save_community_draft_order_impl(
+        67 => wire__crate__api__simple__save_community_draft_order_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__api__simple__send_community_draft_to_kitchen_impl(
+        68 => wire__crate__api__simple__send_community_draft_to_kitchen_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        64 => wire__crate__api__simple__set_community_inventory_low_stock_threshold_impl(
+        69 => wire__crate__api__simple__set_community_edition_and_device_role_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => wire__crate__api__simple__set_community_product_availability_impl(
+        70 => wire__crate__api__simple__set_community_inventory_low_stock_threshold_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        66 => wire__crate__api__simple__set_community_product_tax_treatment_impl(
+        71 => wire__crate__api__simple__set_community_product_availability_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => {
+        72 => wire__crate__api__simple__set_community_product_tax_treatment_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        73 => wire__crate__api__simple__start_new_community_restaurant_profile_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        74 => {
             wire__crate__api__simple__unlock_community_staff_impl(port, ptr, rust_vec_len, data_len)
         }
-        68 => wire__crate__api__simple__update_community_product_price_impl(
+        75 => wire__crate__api__simple__update_community_product_price_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => wire__crate__api__simple__verify_community_local_backup_impl(
+        76 => wire__crate__api__simple__verify_community_local_backup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        70 => {
+        77 => {
             wire__crate__api__simple__void_community_invoice_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -4498,7 +4890,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        42 => wire__crate__api__simple__local_core_status_impl(ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__simple__local_core_status_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -5181,6 +5573,30 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::CommunityPaymentAlloc
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::simple::CommunityPortableBackupResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.storage_status.into_into_dart().into_dart(),
+            self.created.into_into_dart().into_dart(),
+            self.backup_file_name.into_into_dart().into_dart(),
+            self.envelope_file_name.into_into_dart().into_dart(),
+            self.sha256.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::simple::CommunityPortableBackupResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::CommunityPortableBackupResult>
+    for crate::api::simple::CommunityPortableBackupResult
+{
+    fn into_into_dart(self) -> crate::api::simple::CommunityPortableBackupResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::simple::CommunityProductView {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -5207,6 +5623,54 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::CommunityProductView>
     for crate::api::simple::CommunityProductView
 {
     fn into_into_dart(self) -> crate::api::simple::CommunityProductView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::simple::CommunityRestaurantProfileRegistry {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.storage_status.into_into_dart().into_dart(),
+            self.available.into_into_dart().into_dart(),
+            self.edition.into_into_dart().into_dart(),
+            self.device_role.into_into_dart().into_dart(),
+            self.active_profile_id.into_into_dart().into_dart(),
+            self.profiles.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::simple::CommunityRestaurantProfileRegistry
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::CommunityRestaurantProfileRegistry>
+    for crate::api::simple::CommunityRestaurantProfileRegistry
+{
+    fn into_into_dart(self) -> crate::api::simple::CommunityRestaurantProfileRegistry {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::simple::CommunityRestaurantProfileView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.profile_id.into_into_dart().into_dart(),
+            self.label.into_into_dart().into_dart(),
+            self.created_at_utc.into_into_dart().into_dart(),
+            self.is_active.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::simple::CommunityRestaurantProfileView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::CommunityRestaurantProfileView>
+    for crate::api::simple::CommunityRestaurantProfileView
+{
+    fn into_into_dart(self) -> crate::api::simple::CommunityRestaurantProfileView {
         self
     }
 }
@@ -5830,6 +6294,17 @@ impl SseEncode for crate::api::simple::CommunityPaymentAllocation {
     }
 }
 
+impl SseEncode for crate::api::simple::CommunityPortableBackupResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.storage_status, serializer);
+        <bool>::sse_encode(self.created, serializer);
+        <Option<String>>::sse_encode(self.backup_file_name, serializer);
+        <Option<String>>::sse_encode(self.envelope_file_name, serializer);
+        <Option<String>>::sse_encode(self.sha256, serializer);
+    }
+}
+
 impl SseEncode for crate::api::simple::CommunityProductView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5847,6 +6322,31 @@ impl SseEncode for crate::api::simple::CommunityProductView {
             self.modifier_options,
             serializer,
         );
+    }
+}
+
+impl SseEncode for crate::api::simple::CommunityRestaurantProfileRegistry {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.storage_status, serializer);
+        <bool>::sse_encode(self.available, serializer);
+        <Option<String>>::sse_encode(self.edition, serializer);
+        <Option<String>>::sse_encode(self.device_role, serializer);
+        <Option<String>>::sse_encode(self.active_profile_id, serializer);
+        <Vec<crate::api::simple::CommunityRestaurantProfileView>>::sse_encode(
+            self.profiles,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::simple::CommunityRestaurantProfileView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.profile_id, serializer);
+        <String>::sse_encode(self.label, serializer);
+        <String>::sse_encode(self.created_at_utc, serializer);
+        <bool>::sse_encode(self.is_active, serializer);
     }
 }
 
@@ -6188,6 +6688,16 @@ impl SseEncode for Vec<crate::api::simple::CommunityProductView> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::simple::CommunityProductView>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::simple::CommunityRestaurantProfileView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::simple::CommunityRestaurantProfileView>::sse_encode(item, serializer);
         }
     }
 }

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../catalog/menu_item_image.dart';
 import '../../features/command_center/money_input.dart';
 import '../../src/rust/api/simple.dart';
+import '../../widgets/interactive_chrome.dart';
+import '../catalog/menu_item_image.dart';
 
 const _maximumModifierOptionsPerSaleLine = 20;
 
@@ -413,6 +414,17 @@ class _PosWorkspaceState extends State<PosWorkspace> {
         title: 'Add a menu item to begin',
         detail:
             'The counter only sells active menu items saved in your encrypted local workspace.',
+        actionLabel: 'Open menu',
+        onAction: widget.onOpenMenu,
+      );
+    }
+
+    if (widget.workspace.products.every((product) => !product.isAvailable)) {
+      return _PosUnavailable(
+        icon: Icons.pause_circle_outline,
+        title: 'No items are ready to sell yet',
+        detail:
+            'Your menu items are still paused. In Menu, update each price if needed, then choose Resume selling so they appear here.',
         actionLabel: 'Open menu',
         onAction: widget.onOpenMenu,
       );
@@ -2191,7 +2203,7 @@ class _CatalogPane extends StatelessWidget {
   }
 }
 
-class _CategoryFilters extends StatelessWidget {
+class _CategoryFilters extends StatefulWidget {
   const _CategoryFilters({
     required this.categories,
     required this.selectedCategoryId,
@@ -2203,24 +2215,142 @@ class _CategoryFilters extends StatelessWidget {
   final ValueChanged<String?> onChanged;
 
   @override
+  State<_CategoryFilters> createState() => _CategoryFiltersState();
+}
+
+class _CategoryFiltersState extends State<_CategoryFilters>
+    with SingleTickerProviderStateMixin {
+  late TabController _controller;
+
+  List<({String? id, String label})> get _entries => [
+    (id: null, label: 'All items'),
+    for (final category in widget.categories)
+      (id: category.categoryId, label: category.displayName),
+  ];
+
+  int _indexForSelection() {
+    final entries = _entries;
+    final index = entries.indexWhere(
+      (entry) => entry.id == widget.selectedCategoryId,
+    );
+    return index < 0 ? 0 : index;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TabController(
+      length: _entries.length,
+      vsync: this,
+      initialIndex: _indexForSelection(),
+    );
+    _controller.addListener(_onControllerTick);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CategoryFilters oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final lengthChanged =
+        oldWidget.categories.length != widget.categories.length;
+    final selectionChanged =
+        oldWidget.selectedCategoryId != widget.selectedCategoryId;
+    if (lengthChanged) {
+      _controller.removeListener(_onControllerTick);
+      _controller.dispose();
+      _controller = TabController(
+        length: _entries.length,
+        vsync: this,
+        initialIndex: _indexForSelection(),
+      );
+      _controller.addListener(_onControllerTick);
+    } else if (selectionChanged &&
+        _controller.index != _indexForSelection() &&
+        !_controller.indexIsChanging) {
+      _controller.animateTo(_indexForSelection());
+    }
+  }
+
+  void _onControllerTick() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+    if (_controller.indexIsChanging) {
+      return;
+    }
+    final entries = _entries;
+    if (_controller.index < 0 || _controller.index >= entries.length) {
+      return;
+    }
+    final selectedId = entries[_controller.index].id;
+    if (selectedId != widget.selectedCategoryId) {
+      widget.onChanged(selectedId);
+    }
+  }
+
+  void _stepCategory(int delta) {
+    if (_entries.length <= 1) {
+      return;
+    }
+    final next = (_controller.index + delta).clamp(0, _entries.length - 1);
+    if (next == _controller.index) {
+      return;
+    }
+    _controller.animateTo(next);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onControllerTick);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+    final canStepBack = _controller.index > 0;
+    final canStepForward = _controller.index < _entries.length - 1;
+    // Keep selection disabled here: an app-wide SelectionArea would otherwise
+    // turn horizontal drags into text selection and clip the remaining tabs.
+    return InteractiveChrome(
       child: Row(
         children: [
-          ChoiceChip(
-            label: const Text('All items'),
-            selected: selectedCategoryId == null,
-            onSelected: (_) => onChanged(null),
-          ),
-          for (final category in categories) ...[
-            const SizedBox(width: 8),
-            ChoiceChip(
-              label: Text(category.displayName),
-              selected: selectedCategoryId == category.categoryId,
-              onSelected: (_) => onChanged(category.categoryId),
+          ExcludeFocus(
+            child: IconButton(
+              key: const Key('pos-category-scroll-left'),
+              tooltip: 'Previous category',
+              onPressed: canStepBack ? () => _stepCategory(-1) : null,
+              icon: const Icon(Icons.chevron_left),
             ),
-          ],
+          ),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TabBar(
+                key: const PageStorageKey('pos-category-filters'),
+                controller: _controller,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                padding: EdgeInsets.zero,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+                tabs: [
+                  for (final entry in _entries)
+                    Tab(
+                      key: ValueKey('pos-category-${entry.id ?? 'all'}'),
+                      text: entry.label,
+                    ),
+                ],
+              ),
+            ),
+          ),
+          ExcludeFocus(
+            child: IconButton(
+              key: const Key('pos-category-scroll-right'),
+              tooltip: 'Next category',
+              onPressed: canStepForward ? () => _stepCategory(1) : null,
+              icon: const Icon(Icons.chevron_right),
+            ),
+          ),
         ],
       ),
     );
@@ -2255,26 +2385,27 @@ class _ProductTile extends StatelessWidget {
     // as separate, ambiguously labelled actions. The card is one action in
     // the counter workflow, so give assistive technology one descriptive
     // control and keep a single keyboard focus stop for it.
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: actionLabel,
-      hint: enabled
-          ? hasModifiers
-                ? 'Choose optional additions, then add one item to the current order.'
-                : 'Adds one item to the current order.'
-          : 'This menu item cannot be added to the current order.',
-      onTap: enabled ? onAdd : null,
-      excludeSemantics: true,
-      child: Card(
-        key: ValueKey('pos-product-${product.productId}'),
-        clipBehavior: Clip.antiAlias,
-        child: Tooltip(
-          message: actionLabel,
-          child: InkWell(
-            key: ValueKey('pos-add-${product.productId}'),
-            onTap: enabled ? onAdd : null,
-            child: Padding(
+    return InteractiveChrome(
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: actionLabel,
+        hint: enabled
+            ? hasModifiers
+                  ? 'Choose optional additions, then add one item to the current order.'
+                  : 'Adds one item to the current order.'
+            : 'This menu item cannot be added to the current order.',
+        onTap: enabled ? onAdd : null,
+        excludeSemantics: true,
+        child: Card(
+          key: ValueKey('pos-product-${product.productId}'),
+          clipBehavior: Clip.antiAlias,
+          child: Tooltip(
+            message: actionLabel,
+            child: InkWell(
+              key: ValueKey('pos-add-${product.productId}'),
+              onTap: enabled ? onAdd : null,
+              child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2350,6 +2481,7 @@ class _ProductTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -2522,62 +2654,66 @@ class _CartPanel extends StatelessWidget {
         const SizedBox(height: 14),
         _SelectorLabel(label: 'Service'),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _SelectionChip(
-              label: 'Takeaway',
-              icon: Icons.takeout_dining_outlined,
-              selected: fulfillment == 'takeaway',
-              enabled: !isBusy && !isKitchenSent,
-              onSelected: () => onFulfillmentChanged('takeaway'),
-            ),
-            _SelectionChip(
-              label: 'Dine in',
-              icon: Icons.table_restaurant_outlined,
-              selected: fulfillment == 'dine_in',
-              enabled: !isBusy && !isKitchenSent,
-              onSelected: () => onFulfillmentChanged('dine_in'),
-            ),
-          ],
+        InteractiveChrome(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _SelectionChip(
+                label: 'Takeaway',
+                icon: Icons.takeout_dining_outlined,
+                selected: fulfillment == 'takeaway',
+                enabled: !isBusy && !isKitchenSent,
+                onSelected: () => onFulfillmentChanged('takeaway'),
+              ),
+              _SelectionChip(
+                label: 'Dine in',
+                icon: Icons.table_restaurant_outlined,
+                selected: fulfillment == 'dine_in',
+                enabled: !isBusy && !isKitchenSent,
+                onSelected: () => onFulfillmentChanged('dine_in'),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 14),
         _SelectorLabel(label: 'Payment received by'),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _SelectionChip(
-              label: 'Cash',
-              icon: Icons.payments_outlined,
-              selected: paymentMethod == 'cash',
-              enabled: !isBusy,
-              onSelected: () => onPaymentMethodChanged('cash'),
-            ),
-            _SelectionChip(
-              label: 'Card',
-              icon: Icons.credit_card_outlined,
-              selected: paymentMethod == 'card',
-              enabled: !isBusy,
-              onSelected: () => onPaymentMethodChanged('card'),
-            ),
-            _SelectionChip(
-              label: 'UPI',
-              icon: Icons.qr_code_2_outlined,
-              selected: paymentMethod == 'upi',
-              enabled: !isBusy,
-              onSelected: () => onPaymentMethodChanged('upi'),
-            ),
-            _SelectionChip(
-              label: 'Split',
-              icon: Icons.call_split_outlined,
-              selected: paymentMethod == 'split',
-              enabled: !isBusy,
-              onSelected: () => onPaymentMethodChanged('split'),
-            ),
-          ],
+        InteractiveChrome(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _SelectionChip(
+                label: 'Cash',
+                icon: Icons.payments_outlined,
+                selected: paymentMethod == 'cash',
+                enabled: !isBusy,
+                onSelected: () => onPaymentMethodChanged('cash'),
+              ),
+              _SelectionChip(
+                label: 'Card',
+                icon: Icons.credit_card_outlined,
+                selected: paymentMethod == 'card',
+                enabled: !isBusy,
+                onSelected: () => onPaymentMethodChanged('card'),
+              ),
+              _SelectionChip(
+                label: 'UPI',
+                icon: Icons.qr_code_2_outlined,
+                selected: paymentMethod == 'upi',
+                enabled: !isBusy,
+                onSelected: () => onPaymentMethodChanged('upi'),
+              ),
+              _SelectionChip(
+                label: 'Split',
+                icon: Icons.call_split_outlined,
+                selected: paymentMethod == 'split',
+                enabled: !isBusy,
+                onSelected: () => onPaymentMethodChanged('split'),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 14),
         _SelectorLabel(label: 'Customer (optional)'),
@@ -2823,23 +2959,25 @@ class _KitchenSentOrderNotice extends StatelessWidget {
               ),
               if (canManageOrders && hasManagementAction) ...[
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (onReopen != null)
-                      OutlinedButton.icon(
-                        onPressed: isBusy ? null : onReopen,
-                        icon: const Icon(Icons.restart_alt_outlined),
-                        label: const Text('Reopen new revision'),
-                      ),
-                    if (onCancel != null)
-                      FilledButton.tonalIcon(
-                        onPressed: isBusy ? null : onCancel,
-                        icon: const Icon(Icons.cancel_outlined),
-                        label: const Text('Cancel sent order'),
-                      ),
-                  ],
+                InteractiveChrome(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (onReopen != null)
+                        OutlinedButton.icon(
+                          onPressed: isBusy ? null : onReopen,
+                          icon: const Icon(Icons.restart_alt_outlined),
+                          label: const Text('Reopen new revision'),
+                        ),
+                      if (onCancel != null)
+                        FilledButton.tonalIcon(
+                          onPressed: isBusy ? null : onCancel,
+                          icon: const Icon(Icons.cancel_outlined),
+                          label: const Text('Cancel sent order'),
+                        ),
+                    ],
+                  ),
                 ),
               ],
             ],

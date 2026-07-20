@@ -151,7 +151,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  CommunityPortableBackupResult dco_decode_community_portable_backup_result(
+    dynamic raw,
+  );
+
+  @protected
   CommunityProductView dco_decode_community_product_view(dynamic raw);
+
+  @protected
+  CommunityRestaurantProfileRegistry
+  dco_decode_community_restaurant_profile_registry(dynamic raw);
+
+  @protected
+  CommunityRestaurantProfileView dco_decode_community_restaurant_profile_view(
+    dynamic raw,
+  );
 
   @protected
   CommunitySalePricingPreview dco_decode_community_sale_pricing_preview(
@@ -275,6 +289,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CommunityProductView> dco_decode_list_community_product_view(
     dynamic raw,
   );
+
+  @protected
+  List<CommunityRestaurantProfileView>
+  dco_decode_list_community_restaurant_profile_view(dynamic raw);
 
   @protected
   List<CommunityStaffView> dco_decode_list_community_staff_view(dynamic raw);
@@ -482,7 +500,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  CommunityPortableBackupResult sse_decode_community_portable_backup_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   CommunityProductView sse_decode_community_product_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CommunityRestaurantProfileRegistry
+  sse_decode_community_restaurant_profile_registry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CommunityRestaurantProfileView sse_decode_community_restaurant_profile_view(
     SseDeserializer deserializer,
   );
 
@@ -624,6 +658,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CommunityProductView> sse_decode_list_community_product_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CommunityRestaurantProfileView>
+  sse_decode_list_community_restaurant_profile_view(
     SseDeserializer deserializer,
   );
 
@@ -876,8 +916,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_community_portable_backup_result(
+    CommunityPortableBackupResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_community_product_view(
     CommunityProductView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_community_restaurant_profile_registry(
+    CommunityRestaurantProfileRegistry self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_community_restaurant_profile_view(
+    CommunityRestaurantProfileView self,
     SseSerializer serializer,
   );
 
@@ -1052,6 +1110,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_community_product_view(
     List<CommunityProductView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_community_restaurant_profile_view(
+    List<CommunityRestaurantProfileView> self,
     SseSerializer serializer,
   );
 

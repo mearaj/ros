@@ -6,8 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `diagnostic_app_channel`, `diagnostic_component_label`, `diagnostic_outcome_label`, `diagnostic_platform`, `locked_workspace`, `normalize_gotigin_catalog_menu_image`, `normalize_restaurant_menu_image`, `open_community_database`, `parse_order_discount`, `record_diagnostic`, `selected_menu_item_image`, `unavailable_audit_timeline`, `unavailable_backup`, `unavailable_cash_drawer`, `unavailable_diagnostics_pack`, `unavailable_diagnostics`, `unavailable_draft`, `unavailable_expenses`, `unavailable_financial_csv_export`, `unavailable_inventory`, `unavailable_invoice_detail`, `unavailable_sale_pricing_preview`, `unavailable_sale`, `unavailable_sales_summary`, `unavailable_staff_security`, `unavailable_sync_queue`, `unavailable_workspace`, `user_safe_bootstrap_status`, `workspace_with_error`, `workspace_with_status`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`
+// These functions are ignored because they are not marked as `pub`: `chrono_like_utc_now`, `community_database_path`, `diagnostic_app_channel`, `diagnostic_component_label`, `diagnostic_outcome_label`, `diagnostic_platform`, `load_or_migrate_profile_registry`, `locked_workspace`, `normalize_gotigin_catalog_menu_image`, `normalize_restaurant_menu_image`, `open_community_database`, `parse_order_discount`, `profile_registry_path`, `record_diagnostic`, `save_profile_registry`, `selected_menu_item_image`, `unavailable_audit_timeline`, `unavailable_backup`, `unavailable_cash_drawer`, `unavailable_diagnostics_pack`, `unavailable_diagnostics`, `unavailable_draft`, `unavailable_expenses`, `unavailable_financial_csv_export`, `unavailable_inventory`, `unavailable_invoice_detail`, `unavailable_profile_registry`, `unavailable_sale_pricing_preview`, `unavailable_sale`, `unavailable_sales_summary`, `unavailable_staff_security`, `unavailable_sync_queue`, `unavailable_workspace`, `user_safe_bootstrap_status`, `workspace_with_error`, `workspace_with_status`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ProfileRegistryEntry`, `ProfileRegistryFile`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`
 
 String localCoreStatus() =>
     RustLib.instance.api.crateApiSimpleLocalCoreStatus();
@@ -30,14 +31,27 @@ Future<CommunityStaffSecurity> loadCommunityStaffSecurity({
   applicationSupportDirectory: applicationSupportDirectory,
 );
 
-/// Sets the owner PIN once, then creates the first short-lived owner session
-/// so onboarding can continue without a second plaintext PIN prompt.
+/// Sets the owner PIN once with a recovery passphrase, then creates the first
+/// short-lived owner session so onboarding can continue without a second
+/// plaintext PIN prompt.
 Future<CommunityStaffSecurity> configureCommunityOwnerPin({
   required String applicationSupportDirectory,
   required String pin,
+  required String recoveryPassphrase,
 }) => RustLib.instance.api.crateApiSimpleConfigureCommunityOwnerPin(
   applicationSupportDirectory: applicationSupportDirectory,
   pin: pin,
+  recoveryPassphrase: recoveryPassphrase,
+);
+
+Future<CommunityStaffSecurity> recoverCommunityOwnerPin({
+  required String applicationSupportDirectory,
+  required String recoveryPassphrase,
+  required String newOwnerPin,
+}) => RustLib.instance.api.crateApiSimpleRecoverCommunityOwnerPin(
+  applicationSupportDirectory: applicationSupportDirectory,
+  recoveryPassphrase: recoveryPassphrase,
+  newOwnerPin: newOwnerPin,
 );
 
 Future<CommunityStaffSecurity> unlockCommunityStaff({
@@ -282,6 +296,60 @@ Future<CommunitySalesSummary> refundCommunityInvoice({
   accountingDateUtc: accountingDateUtc,
 );
 
+Future<CommunityPortableBackupResult> createCommunityPortableBackup({
+  required String applicationSupportDirectory,
+  required String recoveryPassphrase,
+}) => RustLib.instance.api.crateApiSimpleCreateCommunityPortableBackup(
+  applicationSupportDirectory: applicationSupportDirectory,
+  recoveryPassphrase: recoveryPassphrase,
+);
+
+Future<CommunityRestaurantProfileRegistry> restoreCommunityPortableBackup({
+  required String applicationSupportDirectory,
+  required String backupFilePath,
+  required String envelopeFilePath,
+  required String recoveryPassphrase,
+  required String profileLabel,
+}) => RustLib.instance.api.crateApiSimpleRestoreCommunityPortableBackup(
+  applicationSupportDirectory: applicationSupportDirectory,
+  backupFilePath: backupFilePath,
+  envelopeFilePath: envelopeFilePath,
+  recoveryPassphrase: recoveryPassphrase,
+  profileLabel: profileLabel,
+);
+
+Future<CommunityRestaurantProfileRegistry> listCommunityRestaurantProfiles({
+  required String applicationSupportDirectory,
+}) => RustLib.instance.api.crateApiSimpleListCommunityRestaurantProfiles(
+  applicationSupportDirectory: applicationSupportDirectory,
+);
+
+Future<CommunityRestaurantProfileRegistry> setCommunityEditionAndDeviceRole({
+  required String applicationSupportDirectory,
+  required String edition,
+  required String deviceRole,
+}) => RustLib.instance.api.crateApiSimpleSetCommunityEditionAndDeviceRole(
+  applicationSupportDirectory: applicationSupportDirectory,
+  edition: edition,
+  deviceRole: deviceRole,
+);
+
+Future<CommunityRestaurantProfileRegistry> startNewCommunityRestaurantProfile({
+  required String applicationSupportDirectory,
+  required String label,
+}) => RustLib.instance.api.crateApiSimpleStartNewCommunityRestaurantProfile(
+  applicationSupportDirectory: applicationSupportDirectory,
+  label: label,
+);
+
+Future<CommunityRestaurantProfileRegistry> activateCommunityRestaurantProfile({
+  required String applicationSupportDirectory,
+  required String profileId,
+}) => RustLib.instance.api.crateApiSimpleActivateCommunityRestaurantProfile(
+  applicationSupportDirectory: applicationSupportDirectory,
+  profileId: profileId,
+);
+
 Future<CommunityBackupResult> createCommunityLocalBackup({
   required String applicationSupportDirectory,
 }) => RustLib.instance.api.crateApiSimpleCreateCommunityLocalBackup(
@@ -407,8 +475,8 @@ Future<CommunityWorkspace> createCommunityCategory({
 );
 
 /// Imports an editable Indian restaurant starter menu. Every item is imported
-/// disabled at a zero price so the owner must review local pricing and
-/// availability before it can appear at the counter.
+/// available at a one-unit placeholder price so the owner can try POS
+/// immediately, then replace prices when ready.
 Future<CommunityWorkspace> importCommonStarterMenu({
   required String applicationSupportDirectory,
 }) => RustLib.instance.api.crateApiSimpleImportCommonStarterMenu(
@@ -1824,6 +1892,41 @@ class CommunityPaymentAllocation {
           amountMinor == other.amountMinor;
 }
 
+class CommunityPortableBackupResult {
+  final String storageStatus;
+  final bool created;
+  final String? backupFileName;
+  final String? envelopeFileName;
+  final String? sha256;
+
+  const CommunityPortableBackupResult({
+    required this.storageStatus,
+    required this.created,
+    this.backupFileName,
+    this.envelopeFileName,
+    this.sha256,
+  });
+
+  @override
+  int get hashCode =>
+      storageStatus.hashCode ^
+      created.hashCode ^
+      backupFileName.hashCode ^
+      envelopeFileName.hashCode ^
+      sha256.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CommunityPortableBackupResult &&
+          runtimeType == other.runtimeType &&
+          storageStatus == other.storageStatus &&
+          created == other.created &&
+          backupFileName == other.backupFileName &&
+          envelopeFileName == other.envelopeFileName &&
+          sha256 == other.sha256;
+}
+
 class CommunityProductView {
   final String productId;
   final String? categoryId;
@@ -1887,6 +1990,76 @@ class CommunityProductView {
           imageAssetKey == other.imageAssetKey &&
           imageBytes == other.imageBytes &&
           modifierOptions == other.modifierOptions;
+}
+
+class CommunityRestaurantProfileRegistry {
+  final String storageStatus;
+  final bool available;
+  final String? edition;
+  final String? deviceRole;
+  final String? activeProfileId;
+  final List<CommunityRestaurantProfileView> profiles;
+
+  const CommunityRestaurantProfileRegistry({
+    required this.storageStatus,
+    required this.available,
+    this.edition,
+    this.deviceRole,
+    this.activeProfileId,
+    required this.profiles,
+  });
+
+  @override
+  int get hashCode =>
+      storageStatus.hashCode ^
+      available.hashCode ^
+      edition.hashCode ^
+      deviceRole.hashCode ^
+      activeProfileId.hashCode ^
+      profiles.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CommunityRestaurantProfileRegistry &&
+          runtimeType == other.runtimeType &&
+          storageStatus == other.storageStatus &&
+          available == other.available &&
+          edition == other.edition &&
+          deviceRole == other.deviceRole &&
+          activeProfileId == other.activeProfileId &&
+          profiles == other.profiles;
+}
+
+class CommunityRestaurantProfileView {
+  final String profileId;
+  final String label;
+  final String createdAtUtc;
+  final bool isActive;
+
+  const CommunityRestaurantProfileView({
+    required this.profileId,
+    required this.label,
+    required this.createdAtUtc,
+    required this.isActive,
+  });
+
+  @override
+  int get hashCode =>
+      profileId.hashCode ^
+      label.hashCode ^
+      createdAtUtc.hashCode ^
+      isActive.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CommunityRestaurantProfileView &&
+          runtimeType == other.runtimeType &&
+          profileId == other.profileId &&
+          label == other.label &&
+          createdAtUtc == other.createdAtUtc &&
+          isActive == other.isActive;
 }
 
 class CommunitySalePricingPreview {

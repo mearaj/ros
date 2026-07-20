@@ -212,26 +212,39 @@ const MAX_FINANCIAL_CSV_BYTES: usize = 4 * 1024 * 1024;
 // private, unpredictable sibling first, then atomically publish it without
 // replacing an existing path.
 const BACKUP_TEMPORARY_RESERVATION_ATTEMPTS: usize = 32;
-const BUILT_IN_MENU_IMAGE_KEYS: [&str; 20] = [
+const BUILT_IN_MENU_IMAGE_KEYS: [&str; 33] = [
     "biryani",
     "curry",
+    "dal",
     "dosa",
     "idli",
+    "upma",
     "snacks",
+    "samosa",
+    "paneer_tikka",
+    "fries",
+    "spring_rolls",
     "pizza",
     "burger",
     "pasta",
     "noodles",
     "rice",
+    "fried_rice",
+    "naan",
+    "roti",
     "sandwich",
     "salad",
     "soup",
     "coffee",
     "chai",
     "juice",
+    "lassi",
+    "lime_soda",
     "mocktail",
     "dessert",
+    "gulab_jamun",
     "ice_cream",
+    "brownie",
     "bakery",
 ];
 // These intentionally differ from the dish-and-drink artwork above. A
@@ -530,25 +543,49 @@ impl DatabaseKey {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct DatabaseKeySlot {
     service: &'static str,
-    account: &'static str,
+    account: String,
 }
 
 impl DatabaseKeySlot {
-    const fn community_default() -> Self {
+    fn community_default() -> Self {
         Self {
             service: DATABASE_KEYRING_SERVICE,
-            account: COMMUNITY_DATABASE_KEYRING_ACCOUNT,
+            account: COMMUNITY_DATABASE_KEYRING_ACCOUNT.to_owned(),
         }
+    }
+
+    /// Per-restaurant-profile keyring account. `profile_id` must be a stable
+    /// opaque id (UUID without path separators). The default profile keeps
+    /// [`COMMUNITY_DATABASE_KEYRING_ACCOUNT`] for existing installs.
+    fn community_profile(profile_id: &str) -> Result<Self, DatabaseBootstrapError> {
+        if profile_id == "default" || profile_id.is_empty() {
+            return Ok(Self::community_default());
+        }
+        if !profile_id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+            || profile_id.len() > 64
+        {
+            return Err(DatabaseBootstrapError::Storage(
+                StorageError::InvalidPersistedData(
+                    "restaurant profile id is invalid".to_owned(),
+                ),
+            ));
+        }
+        Ok(Self {
+            service: DATABASE_KEYRING_SERVICE,
+            account: format!("community-profile-{profile_id}"),
+        })
     }
 }
 
 trait DatabaseKeyStore {
-    fn load(&self, slot: DatabaseKeySlot) -> Result<Option<DatabaseKey>, KeyStoreError>;
-    fn store_new(&self, slot: DatabaseKeySlot, key: &DatabaseKey) -> Result<(), KeyStoreError>;
-    fn clear(&self, slot: DatabaseKeySlot) -> Result<(), KeyStoreError>;
+    fn load(&self, slot: &DatabaseKeySlot) -> Result<Option<DatabaseKey>, KeyStoreError>;
+    fn store_new(&self, slot: &DatabaseKeySlot, key: &DatabaseKey) -> Result<(), KeyStoreError>;
+    fn clear(&self, slot: &DatabaseKeySlot) -> Result<(), KeyStoreError>;
 }
 
 #[derive(Debug)]
@@ -632,18 +669,25 @@ pub enum DevelopmentUninstallError {
     Lock(std::io::Error),
     Filesystem(std::io::Error),
     UnsafeDatabaseArtifact,
+    Incomplete(String),
 }
 
 impl fmt::Display for DevelopmentUninstallError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::KeyStore(error) => write!(formatter, "Secure storage failed: {error}"),
-            Self::Lock(_) => formatter.write_str("The local database lock could not be acquired."),
+            Self::Lock(_) => formatter.write_str(
+                "The local database lock could not be acquired. Close the ROS desktop app and try again.",
+            ),
             Self::Filesystem(_) => {
                 formatter.write_str("The encrypted local database files could not be removed.")
             }
             Self::UnsafeDatabaseArtifact => formatter
                 .write_str("The local database path was not a regular file and was not removed."),
+            Self::Incomplete(detail) => write!(
+                formatter,
+                "Local uninstall could not clear every restaurant profile or credential ({detail})."
+            ),
         }
     }
 }
@@ -653,7 +697,7 @@ impl Error for DevelopmentUninstallError {
         match self {
             Self::KeyStore(error) => Some(error),
             Self::Lock(error) | Self::Filesystem(error) => Some(error),
-            Self::UnsafeDatabaseArtifact => None,
+            Self::UnsafeDatabaseArtifact | Self::Incomplete(_) => None,
         }
     }
 }
@@ -669,24 +713,24 @@ struct PlatformDatabaseKeyStore;
     any(target_os = "windows", target_os = "macos", target_os = "linux")
 ))]
 impl DatabaseKeyStore for PlatformDatabaseKeyStore {
-    fn load(&self, slot: DatabaseKeySlot) -> Result<Option<DatabaseKey>, KeyStoreError> {
+    fn load(&self, slot: &DatabaseKeySlot) -> Result<Option<DatabaseKey>, KeyStoreError> {
         let _guard = key_store_lock();
-        match load_keyring_secret(slot.service, slot.account)? {
+        match load_keyring_secret(slot.service, slot.account.as_str())? {
             Some(key) => Ok(Some(key)),
             None => migrate_legacy_keyring_secret(slot),
         }
     }
 
-    fn store_new(&self, slot: DatabaseKeySlot, key: &DatabaseKey) -> Result<(), KeyStoreError> {
+    fn store_new(&self, slot: &DatabaseKeySlot, key: &DatabaseKey) -> Result<(), KeyStoreError> {
         let _guard = key_store_lock();
-        store_keyring_secret(slot.service, slot.account, key)
+        store_keyring_secret(slot.service, slot.account.as_str(), key)
     }
 
-    fn clear(&self, slot: DatabaseKeySlot) -> Result<(), KeyStoreError> {
+    fn clear(&self, slot: &DatabaseKeySlot) -> Result<(), KeyStoreError> {
         let _guard = key_store_lock();
-        delete_keyring_secret(slot.service, slot.account)?;
+        delete_keyring_secret(slot.service, slot.account.as_str())?;
         // Best-effort: a pre-rename legacy entry must not block fresh setup.
-        let _ = delete_keyring_secret(LEGACY_DATABASE_KEYRING_SERVICE, slot.account);
+        let _ = delete_keyring_secret(LEGACY_DATABASE_KEYRING_SERVICE, slot.account.as_str());
         Ok(())
     }
 }
@@ -740,18 +784,19 @@ fn delete_keyring_secret(service: &str, account: &str) -> Result<(), KeyStoreErr
     any(target_os = "windows", target_os = "macos", target_os = "linux")
 ))]
 fn migrate_legacy_keyring_secret(
-    slot: DatabaseKeySlot,
+    slot: &DatabaseKeySlot,
 ) -> Result<Option<DatabaseKey>, KeyStoreError> {
     if slot.service == LEGACY_DATABASE_KEYRING_SERVICE {
         return Ok(None);
     }
 
-    let Some(key) = load_keyring_secret(LEGACY_DATABASE_KEYRING_SERVICE, slot.account)? else {
+    let Some(key) = load_keyring_secret(LEGACY_DATABASE_KEYRING_SERVICE, slot.account.as_str())?
+    else {
         return Ok(None);
     };
 
-    store_keyring_secret(slot.service, slot.account, &key)?;
-    let verified = load_keyring_secret(slot.service, slot.account)?
+    store_keyring_secret(slot.service, slot.account.as_str(), &key)?;
+    let verified = load_keyring_secret(slot.service, slot.account.as_str())?
         .ok_or(KeyStoreError::WriteVerificationFailed)?;
     if !verified.same_as(&key) {
         return Err(KeyStoreError::WriteVerificationFailed);
@@ -759,7 +804,9 @@ fn migrate_legacy_keyring_secret(
 
     // Best-effort cleanup of the pre-rename service ID. Failure here must not
     // block opening an already-verified current entry.
-    if let Ok(legacy_entry) = keyring::Entry::new(LEGACY_DATABASE_KEYRING_SERVICE, slot.account) {
+    if let Ok(legacy_entry) =
+        keyring::Entry::new(LEGACY_DATABASE_KEYRING_SERVICE, slot.account.as_str())
+    {
         let _ = legacy_entry.delete_credential();
     }
 
@@ -2176,10 +2223,24 @@ struct SaleLineModifierSnapshot {
 pub fn open_or_create_platform_database(
     path: impl AsRef<Path>,
 ) -> Result<LocalDatabase, DatabaseBootstrapError> {
+    open_or_create_platform_database_for_profile(path, "default")
+}
+
+/// Opens or creates the encrypted database for a local restaurant profile.
+/// Profile id `default` uses the legacy community keyring account so existing
+/// installs keep working.
+#[cfg(all(
+    feature = "platform-keyring",
+    any(target_os = "windows", target_os = "macos", target_os = "linux")
+))]
+pub fn open_or_create_platform_database_for_profile(
+    path: impl AsRef<Path>,
+    profile_id: &str,
+) -> Result<LocalDatabase, DatabaseBootstrapError> {
     open_or_create_with_key_store(
         path.as_ref(),
         &PlatformDatabaseKeyStore,
-        DatabaseKeySlot::community_default(),
+        &DatabaseKeySlot::community_profile(profile_id)?,
     )
 }
 
@@ -2195,11 +2256,86 @@ pub fn open_or_create_platform_database(
     Err(DatabaseBootstrapError::UnsupportedSecureStoragePlatform)
 }
 
+#[cfg(all(
+    feature = "platform-keyring",
+    not(any(target_os = "windows", target_os = "macos", target_os = "linux"))
+))]
+pub fn open_or_create_platform_database_for_profile(
+    _path: impl AsRef<Path>,
+    _profile_id: &str,
+) -> Result<LocalDatabase, DatabaseBootstrapError> {
+    Err(DatabaseBootstrapError::UnsupportedSecureStoragePlatform)
+}
+
+/// Installs an unwrapped portable-restore key into the profile keyring slot and
+/// opens an already-written destination database. The destination must exist;
+/// the keyring slot must be empty.
+#[cfg(all(
+    feature = "platform-keyring",
+    any(target_os = "windows", target_os = "macos", target_os = "linux")
+))]
+pub fn install_unwrapped_key_and_open_database_for_profile(
+    path: impl AsRef<Path>,
+    profile_id: &str,
+    key_bytes: [u8; 32],
+) -> Result<LocalDatabase, DatabaseBootstrapError> {
+    let path = path.as_ref();
+    let slot = DatabaseKeySlot::community_profile(profile_id)?;
+    let _bootstrap_lock = acquire_bootstrap_lock(path)?;
+    if !path.exists() {
+        return Err(DatabaseBootstrapError::Storage(
+            StorageError::InvalidPersistedData(
+                "portable restore destination database is missing".to_owned(),
+            ),
+        ));
+    }
+    let key_store = PlatformDatabaseKeyStore;
+    if key_store
+        .load(&slot)
+        .map_err(DatabaseBootstrapError::KeyStore)?
+        .is_some()
+    {
+        return Err(DatabaseBootstrapError::Storage(
+            StorageError::InvalidPersistedData(
+                "refusing to install a restored key over an existing profile key".to_owned(),
+            ),
+        ));
+    }
+    let key = DatabaseKey::from_bytes(key_bytes);
+    key_store
+        .store_new(&slot, &key)
+        .map_err(DatabaseBootstrapError::KeyStore)?;
+    let verified = key_store
+        .load(&slot)
+        .map_err(DatabaseBootstrapError::KeyStore)?
+        .ok_or(DatabaseBootstrapError::KeyStore(
+            KeyStoreError::WriteVerificationFailed,
+        ))?;
+    if !verified.same_as(&key) {
+        return Err(DatabaseBootstrapError::KeyStore(
+            KeyStoreError::WriteVerificationFailed,
+        ));
+    }
+    LocalDatabase::open(path, &key).map_err(DatabaseBootstrapError::Storage)
+}
+
+#[cfg(all(
+    feature = "platform-keyring",
+    not(any(target_os = "windows", target_os = "macos", target_os = "linux"))
+))]
+pub fn install_unwrapped_key_and_open_database_for_profile(
+    _path: impl AsRef<Path>,
+    _profile_id: &str,
+    _key_bytes: [u8; 32],
+) -> Result<LocalDatabase, DatabaseBootstrapError> {
+    Err(DatabaseBootstrapError::UnsupportedSecureStoragePlatform)
+}
+
 #[cfg(feature = "platform-keyring")]
 fn open_or_create_with_key_store(
     path: &Path,
     key_store: &impl DatabaseKeyStore,
-    slot: DatabaseKeySlot,
+    slot: &DatabaseKeySlot,
 ) -> Result<LocalDatabase, DatabaseBootstrapError> {
     let _bootstrap_lock = acquire_bootstrap_lock(path)?;
     let database_exists = path.exists();
@@ -2231,7 +2367,7 @@ pub fn reset_orphaned_key_and_create_platform_database(
     reset_orphaned_key_and_create_with_key_store(
         path.as_ref(),
         &PlatformDatabaseKeyStore,
-        DatabaseKeySlot::community_default(),
+        &DatabaseKeySlot::community_default(),
     )
 }
 
@@ -2249,7 +2385,7 @@ pub fn reset_orphaned_key_and_create_platform_database(
 fn reset_orphaned_key_and_create_with_key_store(
     path: &Path,
     key_store: &impl DatabaseKeyStore,
-    slot: DatabaseKeySlot,
+    slot: &DatabaseKeySlot,
 ) -> Result<LocalDatabase, DatabaseBootstrapError> {
     let _bootstrap_lock = acquire_bootstrap_lock(path)?;
     if path.exists() {
@@ -2291,16 +2427,100 @@ pub fn uninstall_development_platform_database(
     uninstall_database_and_key_with_store(
         path.as_ref(),
         &PlatformDatabaseKeyStore,
-        DatabaseKeySlot::community_default(),
+        &DatabaseKeySlot::community_default(),
     )
+}
+
+/// Completely clears a development application-support directory: every
+/// restaurant-profile database, every matching secure-store credential
+/// (including orphaned profile slots from `restaurant-profiles.json`), and the
+/// default Community key. The shell script then deletes the emptied directory.
+///
+/// Callers must close the desktop app first (the shell script stops it).
+#[cfg(all(
+    feature = "development-bundled-sqlcipher",
+    feature = "platform-keyring",
+    any(target_os = "windows", target_os = "macos", target_os = "linux")
+))]
+pub fn uninstall_development_local_install(
+    support_directory: impl AsRef<Path>,
+) -> Result<(), DevelopmentUninstallError> {
+    let support_directory = support_directory.as_ref();
+    let key_store = PlatformDatabaseKeyStore;
+    const DATABASE_FILE_NAME: &str = "restaurant-os.development.db";
+
+    let mut profile_ids = std::collections::BTreeSet::new();
+    profile_ids.insert("default".to_owned());
+
+    let registry_path = support_directory.join("restaurant-profiles.json");
+    if registry_path.is_file() {
+        if let Ok(bytes) = fs::read(&registry_path) {
+            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                if let Some(active) = value.get("active_profile_id").and_then(|v| v.as_str()) {
+                    profile_ids.insert(active.to_owned());
+                }
+                if let Some(profiles) = value.get("profiles").and_then(|v| v.as_array()) {
+                    for profile in profiles {
+                        if let Some(id) = profile.get("profile_id").and_then(|v| v.as_str()) {
+                            profile_ids.insert(id.to_owned());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let profiles_root = support_directory.join("profiles");
+    if profiles_root.is_dir() {
+        if let Ok(entries) = fs::read_dir(&profiles_root) {
+            for entry in entries.flatten() {
+                if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+                    if let Some(name) = entry.file_name().to_str() {
+                        profile_ids.insert(name.to_owned());
+                    }
+                }
+            }
+        }
+    }
+
+    let mut errors = Vec::new();
+    for profile_id in &profile_ids {
+        let database_path = if profile_id == "default" {
+            support_directory.join(DATABASE_FILE_NAME)
+        } else {
+            profiles_root.join(profile_id).join(DATABASE_FILE_NAME)
+        };
+        let Ok(slot) = DatabaseKeySlot::community_profile(profile_id) else {
+            continue;
+        };
+        if let Err(error) = uninstall_database_and_key_with_store(&database_path, &key_store, &slot)
+        {
+            errors.push(format!("profile {profile_id}: {error}"));
+        }
+    }
+
+    if !errors.is_empty() {
+        return Err(DevelopmentUninstallError::Incomplete(errors.join("; ")));
+    }
+    Ok(())
 }
 
 #[cfg(feature = "platform-keyring")]
 fn uninstall_database_and_key_with_store(
     path: &Path,
     key_store: &impl DatabaseKeyStore,
-    slot: DatabaseKeySlot,
+    slot: &DatabaseKeySlot,
 ) -> Result<(), DevelopmentUninstallError> {
+    let artifacts = local_database_artifact_paths(path);
+    let any_artifact_present = artifacts.iter().any(|artifact| artifact.exists());
+    if !any_artifact_present {
+        // Orphan credential from a deleted profile directory: clear the key and
+        // leave no lock file behind in a missing parent path.
+        return key_store
+            .clear(slot)
+            .map_err(DevelopmentUninstallError::KeyStore);
+    }
+
     let _bootstrap_lock = acquire_bootstrap_lock(path).map_err(|error| match error {
         DatabaseBootstrapError::Lock(error) => DevelopmentUninstallError::Lock(error),
         DatabaseBootstrapError::KeyStore(error) => DevelopmentUninstallError::KeyStore(error),
@@ -2317,7 +2537,7 @@ fn uninstall_database_and_key_with_store(
     let operation_id = EntityId::new_v7().to_string();
     let mut staged_artifacts = Vec::new();
 
-    for artifact in local_database_artifact_paths(path) {
+    for artifact in artifacts {
         match fs::symlink_metadata(&artifact) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(error) => {
@@ -2392,7 +2612,7 @@ fn restore_staged_database_artifacts(staged_artifacts: &[(PathBuf, PathBuf)]) {
 fn create_fresh_database_with_key_store(
     path: &Path,
     key_store: &impl DatabaseKeyStore,
-    slot: DatabaseKeySlot,
+    slot: &DatabaseKeySlot,
 ) -> Result<LocalDatabase, DatabaseBootstrapError> {
     let generated_key = DatabaseKey::generate().map_err(DatabaseBootstrapError::KeyStore)?;
     key_store
@@ -2719,6 +2939,10 @@ impl LocalDatabase {
     /// Sets the owner credential exactly once. The plaintext PIN is accepted
     /// only for this call, transformed to an Argon2id digest in Rust, and is
     /// never placed in an audit payload or Flutter-visible model.
+    ///
+    /// Production Community onboarding must call
+    /// [`Self::set_initial_owner_pin_with_recovery_passphrase`] so forgotten-PIN
+    /// recovery is available immediately.
     pub fn set_initial_owner_pin(&self, pin: &str) -> Result<(), StorageError> {
         validate_local_staff_pin(pin)?;
         let pin_hash = hash_local_staff_pin(pin)?;
@@ -2790,6 +3014,29 @@ impl LocalDatabase {
                 ],
             )
             .map_err(StorageError::Sql)?;
+        transaction.commit().map_err(StorageError::Sql)
+    }
+
+    /// Sets the Owner PIN once and stores the recovery-passphrase verifier
+    /// during onboarding (ADR 0007).
+    pub fn set_initial_owner_pin_with_recovery_passphrase(
+        &self,
+        pin: &str,
+        recovery_passphrase: &str,
+    ) -> Result<(), StorageError> {
+        self.set_initial_owner_pin(pin)?;
+        let transaction = begin_immediate_transaction(&self.connection)?;
+        let branch = read_community_branch(&transaction)?;
+        let (_, owner_actor_id) = ensure_local_installation_identity(&transaction)?;
+        let occurred_at = utc_timestamp(&transaction)?;
+        let verifier_hash = recovery::hash_recovery_passphrase(recovery_passphrase)?;
+        replace_owner_recovery_verifier(
+            &transaction,
+            branch.organization_id(),
+            &verifier_hash,
+            &occurred_at,
+            &owner_actor_id,
+        )?;
         transaction.commit().map_err(StorageError::Sql)
     }
 
@@ -7776,7 +8023,9 @@ impl LocalDatabase {
         let transaction = begin_immediate_transaction(&self.connection)?;
         ensure_active_branch(&transaction, context.branch_id())?;
         let product = read_product(&transaction, context.branch_id(), product_id)?;
-        if product.archived() || !product.is_available() {
+        // Availability only gates selling. Owners and managers must still be
+        // able to attach imagery while reviewing a paused starter import.
+        if product.archived() {
             return Err(StorageError::ProductUnavailable);
         }
 
@@ -8257,33 +8506,13 @@ impl LocalDatabase {
             .map_err(StorageError::Sql)?;
         let created_at = utc_timestamp(&transaction)?;
         let verifier_hash = recovery::hash_recovery_passphrase(recovery_passphrase)?;
-        transaction
-            .execute(
-                "
-                UPDATE owner_recovery_verifiers
-                SET superseded_at_utc = ?1
-                WHERE organization_id = ?2 AND superseded_at_utc IS NULL
-                ",
-                params![created_at.as_str(), organization_id],
-            )
-            .map_err(StorageError::Sql)?;
-        transaction
-            .execute(
-                "
-                INSERT INTO owner_recovery_verifiers (
-                    owner_recovery_verifier_id, organization_id, argon2id_hash,
-                    created_at_utc, created_by_actor_id
-                ) VALUES (?1, ?2, ?3, ?4, ?5)
-                ",
-                params![
-                    EntityId::new_v7().to_string(),
-                    organization_id,
-                    verifier_hash,
-                    created_at.as_str(),
-                    context.actor_id().to_string(),
-                ],
-            )
-            .map_err(StorageError::Sql)?;
+        replace_owner_recovery_verifier(
+            &transaction,
+            &parse_persisted_id(&organization_id)?,
+            &verifier_hash,
+            &created_at,
+            context.actor_id(),
+        )?;
         transaction.commit().map_err(StorageError::Sql)?;
         let envelope = recovery::wrap_database_key(
             self.key.as_bytes(),
@@ -8355,6 +8584,39 @@ impl LocalDatabase {
         validate_local_staff_pin(new_owner_pin)?;
         let transaction = begin_immediate_transaction(&self.connection)?;
         let branch = read_community_branch(&transaction)?;
+        let owner_id: String = transaction
+            .query_row(
+                "
+                SELECT staff_id FROM staff_accounts
+                WHERE branch_id = ?1 AND role = 'owner'
+                ORDER BY created_at_utc ASC LIMIT 1
+                ",
+                [branch.branch_id().to_string()],
+                |row| row.get(0),
+            )
+            .map_err(StorageError::Sql)?;
+        let attempted_at = observe_local_security_clock(&transaction)?
+            .ok_or(StorageError::StaffPinTemporarilyLocked)?;
+        let failed_attempts: i64 = transaction
+            .query_row(
+                "
+                SELECT COUNT(*)
+                FROM staff_pin_attempts
+                WHERE staff_id = ?1
+                  AND succeeded = 0
+                  AND attempted_at_utc >= strftime('%Y-%m-%dT%H:%M:%fZ', ?2, ?3)
+                ",
+                params![
+                    owner_id.as_str(),
+                    attempted_at,
+                    format!("-{} minutes", LOCAL_STAFF_PIN_THROTTLE_MINUTES),
+                ],
+                |row| row.get(0),
+            )
+            .map_err(StorageError::Sql)?;
+        if failed_attempts >= LOCAL_STAFF_PIN_MAXIMUM_FAILED_ATTEMPTS {
+            return Err(StorageError::StaffPinTemporarilyLocked);
+        }
         let digest: String = transaction
             .query_row(
                 "
@@ -8374,20 +8636,29 @@ impl LocalDatabase {
                     "no owner recovery verifier is configured".to_owned(),
                 )
             })?;
-        if !recovery::verify_recovery_passphrase(recovery_passphrase, &digest) {
-            return Err(StorageError::InvalidStaffPin);
-        }
-        let owner_id: String = transaction
-            .query_row(
+        let verified = recovery::verify_recovery_passphrase(recovery_passphrase, &digest);
+        transaction
+            .execute(
                 "
-                SELECT staff_id FROM staff_accounts
-                WHERE branch_id = ?1 AND role = 'owner'
-                ORDER BY created_at_utc ASC LIMIT 1
+                INSERT INTO staff_pin_attempts (
+                    staff_pin_attempt_id,
+                    staff_id,
+                    succeeded,
+                    attempted_at_utc
+                ) VALUES (?1, ?2, ?3, ?4)
                 ",
-                [branch.branch_id().to_string()],
-                |row| row.get(0),
+                params![
+                    EntityId::new_v7().to_string(),
+                    owner_id.as_str(),
+                    i64::from(verified),
+                    attempted_at,
+                ],
             )
             .map_err(StorageError::Sql)?;
+        if !verified {
+            transaction.commit().map_err(StorageError::Sql)?;
+            return Err(StorageError::InvalidStaffPin);
+        }
         let pin_hash = hash_local_staff_pin(new_owner_pin)?;
         let occurred_at = utc_timestamp(&transaction)?;
         let (device_id, _) = ensure_local_installation_identity(&transaction)?;
@@ -8961,11 +9232,15 @@ fn validate_product_image_catalog_provenance(
     Ok(())
 }
 
-fn is_supported_builtin_menu_image_key(asset_key: &str) -> bool {
+/// Public so callers that seed built-in imagery (for example the starter-menu
+/// import) can verify their asset keys against the storage contract in tests.
+pub fn is_supported_builtin_menu_image_key(asset_key: &str) -> bool {
     BUILT_IN_MENU_IMAGE_KEYS.contains(&asset_key)
 }
 
-fn is_supported_builtin_category_image_key(asset_key: &str) -> bool {
+/// Public counterpart of [`is_supported_builtin_menu_image_key`] for the
+/// distinct category artwork library.
+pub fn is_supported_builtin_category_image_key(asset_key: &str) -> bool {
     BUILT_IN_CATEGORY_IMAGE_KEYS.contains(&asset_key)
         // Categories assigned before the distinct artwork library shipped used
         // a menu key. Keep those local installs readable and editable; the UI
@@ -10702,6 +10977,43 @@ fn utc_timestamp(transaction: &Transaction<'_>) -> Result<String, StorageError> 
             row.get(0)
         })
         .map_err(StorageError::Sql)
+}
+
+fn replace_owner_recovery_verifier(
+    transaction: &Transaction<'_>,
+    organization_id: &EntityId,
+    verifier_hash: &str,
+    created_at_utc: &str,
+    created_by_actor_id: &EntityId,
+) -> Result<(), StorageError> {
+    transaction
+        .execute(
+            "
+            UPDATE owner_recovery_verifiers
+            SET superseded_at_utc = ?1
+            WHERE organization_id = ?2 AND superseded_at_utc IS NULL
+            ",
+            params![created_at_utc, organization_id.to_string()],
+        )
+        .map_err(StorageError::Sql)?;
+    transaction
+        .execute(
+            "
+            INSERT INTO owner_recovery_verifiers (
+                owner_recovery_verifier_id, organization_id, argon2id_hash,
+                created_at_utc, created_by_actor_id
+            ) VALUES (?1, ?2, ?3, ?4, ?5)
+            ",
+            params![
+                EntityId::new_v7().to_string(),
+                organization_id.to_string(),
+                verifier_hash,
+                created_at_utc,
+                created_by_actor_id.to_string(),
+            ],
+        )
+        .map_err(StorageError::Sql)?;
+    Ok(())
 }
 
 fn ensure_active_branch(
@@ -12943,7 +13255,7 @@ mod tests {
     }
 
     impl DatabaseKeyStore for MemoryKeyStore {
-        fn load(&self, _slot: DatabaseKeySlot) -> Result<Option<DatabaseKey>, KeyStoreError> {
+        fn load(&self, _slot: &DatabaseKeySlot) -> Result<Option<DatabaseKey>, KeyStoreError> {
             Ok(self
                 .stored_key
                 .lock()
@@ -12955,14 +13267,14 @@ mod tests {
 
         fn store_new(
             &self,
-            _slot: DatabaseKeySlot,
+            _slot: &DatabaseKeySlot,
             key: &DatabaseKey,
         ) -> Result<(), KeyStoreError> {
             *self.stored_key.lock().expect("test key-store lock") = Some(*key.as_bytes());
             Ok(())
         }
 
-        fn clear(&self, _slot: DatabaseKeySlot) -> Result<(), KeyStoreError> {
+        fn clear(&self, _slot: &DatabaseKeySlot) -> Result<(), KeyStoreError> {
             *self.stored_key.lock().expect("test key-store lock") = None;
             Ok(())
         }
@@ -15864,7 +16176,7 @@ mod tests {
 
     #[test]
     fn product_availability_is_revisioned_audited_and_blocks_sales_until_resumed() {
-        let (_temp, database, _branch) = provisioned_database();
+        let (_temp, database, branch) = provisioned_database();
         let context = mutation_context(&database);
         let category = database
             .create_category(
@@ -15918,6 +16230,28 @@ mod tests {
             )
             .expect("price updated while sold out");
         assert!(!repriced_while_sold_out.is_available());
+        let image_while_paused = database
+            .replace_product_image(
+                paused.product_id(),
+                &ProductImageContent::built_in("snacks"),
+                &context,
+            )
+            .expect("image can be set while sold out");
+        assert_eq!(image_while_paused.asset_key(), Some("snacks"));
+        let catalog_images = database
+            .list_catalog_product_images(branch.branch_id())
+            .expect("catalog images include paused items");
+        assert!(catalog_images.iter().any(|image| {
+            image.product_id() == paused.product_id() && image.asset_key() == Some("snacks")
+        }));
+        let sale_images = database
+            .list_sale_product_images(branch.branch_id())
+            .expect("sale images");
+        assert!(
+            sale_images
+                .iter()
+                .all(|image| image.product_id() != paused.product_id())
+        );
         assert!(matches!(
             database.set_product_availability(
                 product.product_id(),
@@ -17767,7 +18101,7 @@ mod tests {
         let store = MemoryKeyStore::default();
         let slot = DatabaseKeySlot::community_default();
 
-        let database = open_or_create_with_key_store(&path, &store, slot)
+        let database = open_or_create_with_key_store(&path, &store, &slot)
             .expect("fresh database is provisioned with a generated key");
         assert_current_migration_manifest(&database);
         assert!(
@@ -17779,7 +18113,7 @@ mod tests {
         );
         drop(database);
 
-        open_or_create_with_key_store(&path, &store, slot)
+        open_or_create_with_key_store(&path, &store, &slot)
             .expect("existing database reopens with its stored key");
 
         let orphaned_database_path = temp.path().join("orphaned.db");
@@ -17788,27 +18122,27 @@ mod tests {
             .expect("encrypted orphaned database");
         let empty_store = MemoryKeyStore::default();
         assert!(matches!(
-            open_or_create_with_key_store(&orphaned_database_path, &empty_store, slot),
+            open_or_create_with_key_store(&orphaned_database_path, &empty_store, &slot),
             Err(DatabaseBootstrapError::DatabaseKeyMissing)
         ));
 
         let key_without_database_path = temp.path().join("missing.db");
         let key_only_store = MemoryKeyStore::default();
         key_only_store
-            .store_new(slot, &DatabaseKey::from_bytes([99; 32]))
+            .store_new(&slot, &DatabaseKey::from_bytes([99; 32]))
             .expect("test key stored");
         assert!(matches!(
-            open_or_create_with_key_store(&key_without_database_path, &key_only_store, slot),
+            open_or_create_with_key_store(&key_without_database_path, &key_only_store, &slot),
             Err(DatabaseBootstrapError::ExistingKeyWithoutDatabase)
         ));
 
         reset_orphaned_key_and_create_with_key_store(
             &key_without_database_path,
             &key_only_store,
-            slot,
+            &slot,
         )
         .expect("orphaned key can be cleared for an explicit fresh setup");
-        open_or_create_with_key_store(&key_without_database_path, &key_only_store, slot)
+        open_or_create_with_key_store(&key_without_database_path, &key_only_store, &slot)
             .expect("fresh setup reopens after orphaned-key reset");
     }
 
@@ -17819,21 +18153,59 @@ mod tests {
         let store = MemoryKeyStore::default();
         let slot = DatabaseKeySlot::community_default();
 
-        let database = open_or_create_with_key_store(&path, &store, slot)
+        let database = open_or_create_with_key_store(&path, &store, &slot)
             .expect("development database provisioned");
         drop(database);
         for sidecar in local_database_artifact_paths(&path).iter().skip(1) {
             fs::write(sidecar, b"test sidecar").expect("test sidecar written");
         }
 
-        uninstall_database_and_key_with_store(&path, &store, slot)
+        uninstall_database_and_key_with_store(&path, &store, &slot)
             .expect("development uninstall clears the complete local installation");
         assert!(
             local_database_artifact_paths(&path)
                 .iter()
                 .all(|artifact| !artifact.exists())
         );
-        assert!(store.load(slot).expect("key store read").is_none());
+        assert!(store.load(&slot).expect("key store read").is_none());
+    }
+
+    #[test]
+    fn owner_pin_recovery_uses_onboarding_passphrase_and_rate_limits_failures() {
+        let (_temp, database, _branch) = fresh_provisioned_database();
+        let passphrase = "owner-recovery-passphrase-ok!";
+        database
+            .set_initial_owner_pin_with_recovery_passphrase("123456", passphrase)
+            .expect("owner pin and recovery verifier");
+        assert!(matches!(
+            database.recover_owner_pin_with_recovery_passphrase("wrong-passphrase!!!!!!!!!!!", "654321"),
+            Err(StorageError::InvalidStaffPin)
+        ));
+        database
+            .recover_owner_pin_with_recovery_passphrase(passphrase, "654321")
+            .expect("owner pin recovered");
+        let owner = database
+            .list_local_staff()
+            .expect("staff")
+            .into_iter()
+            .find(|staff| staff.role() == ActorRole::Owner)
+            .expect("owner");
+        database
+            .unlock_local_staff(owner.staff_id(), "654321")
+            .expect("new pin unlocks");
+        for _ in 0..LOCAL_STAFF_PIN_MAXIMUM_FAILED_ATTEMPTS {
+            let _ = database.recover_owner_pin_with_recovery_passphrase(
+                "still-wrong-passphrase!!!!!!",
+                "111111",
+            );
+        }
+        assert!(matches!(
+            database.recover_owner_pin_with_recovery_passphrase(
+                "still-wrong-passphrase!!!!!!",
+                "111111",
+            ),
+            Err(StorageError::StaffPinTemporarilyLocked)
+        ));
     }
 
     #[test]

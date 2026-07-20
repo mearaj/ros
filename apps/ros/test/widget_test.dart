@@ -74,6 +74,22 @@ void main() {
     },
   );
 
+  testWidgets(
+    'exposes an app-wide SelectionArea so visible text stays copyable',
+    (tester) async {
+      await tester.pumpWidget(
+        const RestaurantOperatingSystemApp(
+          coreStatus: 'Restaurant Operating System • Rust operational core',
+          staffSecurity: _activeOwnerSecurity,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SelectionArea), findsWidgets);
+      expect(find.text('Your restaurant is ready for service.'), findsOne);
+    },
+  );
+
   testWidgets('keeps kitchen staff out of financial reporting navigation', (
     tester,
   ) async {
@@ -84,16 +100,53 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Reports'));
+    await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
 
     expect(
-      find.text('This workspace is not available to the active role.'),
+      find.text(
+        'Menu and More are available to Owner and Manager. Unlock as one of those roles to continue.',
+      ),
       findsOne,
     );
     expect(find.text('Your restaurant is ready for service.'), findsOne);
   });
 
+  testWidgets(
+    'guides first-time setup away from role-blaming POS denial',
+    (tester) async {
+      await tester.pumpWidget(
+        const RestaurantOperatingSystemApp(
+          coreStatus: 'Restaurant Operating System • Rust operational core',
+          workspace: CommunityWorkspace(
+            storageStatus: 'Saved locally • encrypted database ready',
+            setupRequired: true,
+            categories: [],
+            products: [],
+            customers: [],
+            openDrafts: [],
+            kitchenTickets: [],
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('POS'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Finish restaurant setup in Menu before opening this workspace.',
+        ),
+        findsOne,
+      );
+      expect(
+        find.text('This workspace is not available to the active role.'),
+        findsNothing,
+      );
+      expect(find.text('Let’s set up your restaurant.'), findsNothing);
+      expect(find.text('Create your local restaurant workspace'), findsOne);
+    },
+  );
   testWidgets(
     'keeps overview metric cards within a narrow desktop viewport at large text',
     (tester) async {
@@ -398,13 +451,84 @@ void main() {
 
     expect(find.text('Secure your restaurant'), findsOneWidget);
     expect(find.byKey(const Key('owner-pin')), findsOneWidget);
+    expect(find.byKey(const Key('owner-recovery-passphrase')), findsOneWidget);
+    expect(
+      find.byKey(const Key('toggle-visibility-Owner PIN')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('back-to-first-run-setup')), findsOneWidget);
     expect(find.text('New order'), findsNothing);
 
     await tester.enterText(find.byKey(const Key('owner-pin')), '12345');
     await tester.enterText(find.byKey(const Key('owner-pin-confirm')), '12345');
+    await tester.enterText(
+      find.byKey(const Key('owner-recovery-passphrase')),
+      'a-valid-recovery-passphrase!!',
+    );
+    await tester.enterText(
+      find.byKey(const Key('owner-recovery-passphrase-confirm')),
+      'a-valid-recovery-passphrase!!',
+    );
+    await tester.ensureVisible(find.byKey(const Key('configure-owner-pin')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('configure-owner-pin')));
     await tester.pump();
     expect(find.text('Use 6 to 12 digits'), findsOneWidget);
+  });
+
+  testWidgets('lock screen exposes Forgot Owner PIN and restaurant history', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const RestaurantOperatingSystemApp(
+        coreStatus: 'Restaurant Operating System • Rust operational core',
+        workspace: CommunityWorkspace(
+          storageStatus: 'Saved locally • encrypted database ready',
+          setupRequired: false,
+          categories: [],
+          products: [],
+          customers: [],
+          openDrafts: [],
+          kitchenTickets: [],
+        ),
+        applicationSupportDirectory: '/test-support',
+        staffSecurity: CommunityStaffSecurity(
+          storageStatus: 'Locked • unlock to continue',
+          available: true,
+          ownerPinSetupRequired: false,
+          staff: [
+            CommunityStaffView(
+              staffId: _ownerStaffId,
+              displayName: 'Owner',
+              role: 'owner',
+              active: true,
+              pinConfigured: true,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text('Unlock Restaurant Operating System'), findsOneWidget);
+    expect(find.byKey(const Key('forgot-owner-pin')), findsOneWidget);
+    expect(find.byKey(const Key('restaurant-profiles')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('forgot-owner-pin')));
+    await tester.pump();
+    expect(find.byKey(const Key('recover-passphrase')), findsOneWidget);
+    expect(find.byKey(const Key('recover-owner-pin')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('recover-passphrase')), 'too-short');
+    await tester.enterText(find.byKey(const Key('recover-owner-pin')), '123456');
+    await tester.enterText(
+      find.byKey(const Key('recover-owner-pin-confirm')),
+      '123456',
+    );
+    await tester.ensureVisible(find.byKey(const Key('submit-recover-owner-pin')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('submit-recover-owner-pin')));
+    await tester.pump();
+    expect(find.text('Use 24 to 64 characters'), findsOneWidget);
   });
 
   testWidgets('renders persisted Community categories in the menu workspace', (

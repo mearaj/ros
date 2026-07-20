@@ -24,14 +24,26 @@ Credential recovery policy `credential-recovery.v1`:
    - appends an audit event `staff.owner_pin.recovered`,
    - never logs the passphrase or new PIN,
    - rate-limits failed recovery attempts (5 failures / 15 minutes).
-3. **Owner PIN loss without recovery envelope:** fail closed. Support may guide
-   clean-install restore from a portable backup + envelope only. Gotigin does
-   not hold a master unlock key and must not invent a remote bypass.
+3. **Owner PIN and passphrase both unavailable on this device:** the Owner may
+   **Start a new restaurant**, which creates a new empty local profile. The
+   prior encrypted profile remains in local restaurant history and is not
+   opened, rewritten, or re-owned. If the Owner later remembers the PIN or
+   recovery passphrase for that profile, they may unlock or recover it from
+   history. Gotigin does not hold a master unlock key and must not invent a
+   remote bypass.
 4. **Escalation boundary:** support tickets may confirm process steps; they
    must never receive PINs, recovery passphrases, SQLCipher keys, or raw
    databases.
 
+The recovery passphrase verifier must be created during Owner onboarding on a
+profile, not deferred until the first portable backup. Portable backup +
+envelope (ADR 0005) remains required for clean-device restore.
+
 ## Consequences
 
-- Implementation adds Owner PIN recovery bound to the recovery-envelope secret.
-- Community remains usable offline for recovery when the envelope exists.
+- Owner PIN recovery is bound to the onboarding recovery passphrase verifier,
+  with portable envelope create/restore and local restaurant profile history
+  for “start new without destroying old.”
+- Community remains usable offline for recovery when the passphrase or
+  portable kit exists; double-forget yields a new empty profile, not a vendor
+  unlock of the old database.

@@ -25,20 +25,31 @@ because its code scaffold exists.
 
 Every Community change must preserve this journey:
 
-1. Install ROS and create a restaurant locally.
-2. Create the Owner PIN immediately after setup; no default PIN exists.
-3. On every cold app launch, show the PIN unlock screen before operational
-   data is shown. A prior 15-minute session must not survive a process restart.
-4. As Owner, create/reset/revoke staff credentials through **Team & PINs**.
+1. Install ROS and choose **Community** (Paid editions remain available but are
+   not the active delivery focus until Community is accepted).
+2. Choose device role: **Hub** (Main) or **Client**. A one-device restaurant
+   chooses Hub; Owner, Manager, Cashier, and Kitchen may all unlock on Hub.
+3. Create a restaurant locally on Hub (or pair a Client to an existing Hub).
+4. Create the Owner PIN and recovery passphrase immediately after setup; no
+   default PIN exists. The recovery-passphrase verifier is stored at
+   onboarding.
+5. On every cold app launch for the active profile, show the PIN unlock screen
+   before operational data is shown. A prior 15-minute session must not survive
+   a process restart. Locking the UI must not stop the Hub service.
+6. As Owner, create/reset/revoke staff credentials through **Team & PINs**.
    A non-owner cannot manage staff or reset the Owner PIN.
-5. Create categories and menu items, then run the counter fully offline.
-6. Optionally import the common Indian starter menu at any point. ROS adds only
-   missing starter categories and items; imported items are disabled at zero
-   price until the owner reviews each price and resumes each item deliberately.
-7. Complete orders, kitchen work, refunds/voids, reports, backup/export, and
+7. Create categories and menu items, then run the counter fully offline.
+8. Optionally import the common Indian starter menu at any point. ROS adds only
+   missing starter categories and items; imported items arrive available at a
+   one-unit (₹1) placeholder price so POS can be tried immediately.
+9. Complete orders, kitchen work, refunds/voids, reports, backup/export, and
    recovery without a cloud account.
-8. Lock, restart, reinstall, restore, or factory-reset according to the
-   Community recovery contract without exposing protected data.
+10. Use one Branch Hub to pair and coordinate multiple counters, kitchen
+    displays, tablets, and owner devices over encrypted LAN without internet.
+11. Lock, restart, reinstall, restore, start a new restaurant profile, or open
+    a profile from local history according to the Community recovery contract
+    without exposing protected data or re-owning an old database without a
+    secret.
 
 ## Required UX rules
 
@@ -48,8 +59,18 @@ Every Community change must preserve this journey:
   a duplicate name, invalid input, missing Owner unlock, or setup requirement.
 - Do not place essential Owner work behind an unlabeled icon. Staff management
   is a visible **Team & PINs** action for the active Owner.
-- Visible status, diagnostic, and report text must be selectable and copyable.
-  Editable fields retain normal input selection.
+- Visible status, diagnostic, report, menu, and counter text must be
+  selectable and copyable through the app-wide SelectionArea. Editable fields
+  keep normal input selection. Disable selection only on interactive chrome
+  where drag-select would block the action—use `InteractiveChrome` for
+  navigation, lock, scrollable tab/chip strips, image chooser grids, product
+  tiles, and dense action rows. Never disable selection on status, error,
+  receipt, or report text.
+- Horizontal filter strips that can outgrow the viewport must scroll (for
+  example a scrollable `TabBar`), not clip later options.
+- Do not pack multiple primary actions into a `ListTile` trailing `Wrap` on
+  narrow layouts. Prefer a single overflow menu (`PopupMenuButton`) so Team &
+  PINs, stock ledger, and invoice actions stay reachable without overflow.
 - Category visuals and menu-item visuals have different roles. The category
   image action must visibly offer all four choices: **app category artwork**,
   **verified Gotigin catalogue photo**, **restaurant-owned upload**, and
@@ -65,6 +86,9 @@ Every Community change must preserve this journey:
 - Prefer a short direct confirmation over a modal or administrative concept
   when the action is routine. Use destructive confirmations only for a real
   data-loss or irreversible boundary.
+- Navigation denials must name the real blocker. Never blame the active role
+  when the restaurant still needs setup, storage recovery, or a staff unlock.
+  During setup, guide the owner into Menu instead of leaving a dead-end snackbar.
 
 ## Data, authorization, and migration invariants
 
@@ -86,6 +110,17 @@ These rules take precedence over UI convenience:
 - Backups/restores must verify encryption, checksum, and schema, and must not
   silently overwrite a live database.
 - Community must remain usable offline and without a Gotigin cloud account.
+- A Community branch has one local Hub authority. Clients never share its
+  SQLite file or finalize authoritative work independently while disconnected.
+- On a Hub device, staff session (Owner/Manager/Cashier/Kitchen) is separate
+  from the Hub service. Role changes and UI lock must not stop LAN service.
+  Only Owner may administer Hub pairing, portable recovery, and local profiles.
+- Local restaurant history may hold more than one encrypted profile on a
+  device. Starting a new restaurant creates a new empty profile; it must never
+  overwrite or become Owner of another profile without PIN or passphrase proof.
+- Cloud editions have one cloud authority and must not enable Community LAN
+  discovery, pairing, Hub hosting, or replication. Edition changes use a
+  verified, single-authority migration; never dual-write or toggle transports.
 
 ## Change protocol for agents and developers
 
@@ -119,9 +154,14 @@ the following have evidence:
 - The customer journey above passes on Linux and Windows, and passes on Android
   phone/tablet plus iOS/iPadOS and macOS when the required devices are
   available.
-- Owner setup, cold-start PIN lock, staff lifecycle, local POS, KDS,
-  inventory, reports, backup/restore, recovery, factory reset, and starter
-  menu import have end-to-end acceptance evidence.
+- Owner setup (edition → device role → restaurant), cold-start PIN lock, Hub
+  continues while UI locked/non-Owner, staff lifecycle, local POS, KDS,
+  inventory, reports, backup/restore, forgotten-Owner-PIN recovery, portable
+  restore, new-profile-with-history, and starter menu import have end-to-end
+  acceptance evidence.
+- Community LAN acceptance covers at least two counters and one KDS, including
+  pairing/revocation, duplicate retries, disconnect/reconnect, Hub restart,
+  staff-security propagation, and verified replacement-Hub restore.
 - Error states are understandable and actionable in the tested paths.
 - Production SQLCipher, secure storage, signing, install/update/uninstall,
   accessibility, and release artifact gates are met for every platform claimed
@@ -141,4 +181,5 @@ Community Safe Mode before a paid plan is offered.
 - [Portable recovery ADR](../adr/0005-portable-recovery-envelope.md) and
   [credential recovery ADR](../adr/0007-credential-recovery.md).
 - [Local staff-session contract](../contracts/local-staff-session-v1.md).
+- [Edition topology and switching ADR](../adr/0010-edition-data-topology-and-switching.md).
 - [Release verification](../runbooks/release-verification.md).

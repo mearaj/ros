@@ -28,7 +28,12 @@ verified backup plus a `ros.recovery.v1` envelope wrapping the SQLCipher key
 with a recovery passphrase. `restore_portable_backup_to_clean_path` unwraps the
 key, verifies integrity/schema, and writes a new destination without overwriting
 an existing live database. Owner PIN recovery (ADR 0007) uses the same
-passphrase verifier.
+passphrase verifier, which must be created at Owner onboarding on that profile.
+
+If both Owner PIN and recovery passphrase are unavailable on a device, the
+Owner may start a **new empty restaurant profile**. The prior profile remains
+in local history and can be reopened later if a secret returns. That path must
+never re-own or decrypt the old database without proof.
 
 ## Required implementation contract
 
