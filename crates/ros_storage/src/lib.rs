@@ -570,9 +570,7 @@ impl DatabaseKeySlot {
             || profile_id.len() > 64
         {
             return Err(DatabaseBootstrapError::Storage(
-                StorageError::InvalidPersistedData(
-                    "restaurant profile id is invalid".to_owned(),
-                ),
+                StorageError::InvalidPersistedData("restaurant profile id is invalid".to_owned()),
             ));
         }
         Ok(Self {
@@ -18178,7 +18176,10 @@ mod tests {
             .set_initial_owner_pin_with_recovery_passphrase("123456", passphrase)
             .expect("owner pin and recovery verifier");
         assert!(matches!(
-            database.recover_owner_pin_with_recovery_passphrase("wrong-passphrase!!!!!!!!!!!", "654321"),
+            database.recover_owner_pin_with_recovery_passphrase(
+                "wrong-passphrase!!!!!!!!!!!",
+                "654321"
+            ),
             Err(StorageError::InvalidStaffPin)
         ));
         database

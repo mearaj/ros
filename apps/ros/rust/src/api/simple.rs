@@ -676,8 +676,7 @@ pub fn recover_community_owner_pin(
             return unavailable_staff_security(status);
         }
     };
-    match database
-        .recover_owner_pin_with_recovery_passphrase(&recovery_passphrase, &new_owner_pin)
+    match database.recover_owner_pin_with_recovery_passphrase(&recovery_passphrase, &new_owner_pin)
     {
         Ok(()) => {
             record_diagnostic(
@@ -2439,8 +2438,8 @@ pub fn create_community_portable_backup(
         Ok(context) => context,
         Err(_) => {
             return CommunityPortableBackupResult {
-                storage_status:
-                    "Portable backup needs attention • unlock the owner session first".to_owned(),
+                storage_status: "Portable backup needs attention • unlock the owner session first"
+                    .to_owned(),
                 created: false,
                 backup_file_name: None,
                 envelope_file_name: None,
@@ -2531,8 +2530,7 @@ pub fn restore_community_portable_backup(
         }
     };
     let profile_id = ros_core::EntityId::new_v7().to_string();
-    let destination =
-        community_database_path(&application_support_directory, &profile_id);
+    let destination = community_database_path(&application_support_directory, &profile_id);
     if let Some(parent) = destination.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
