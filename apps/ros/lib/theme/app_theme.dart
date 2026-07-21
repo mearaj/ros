@@ -11,10 +11,11 @@ abstract final class AppTheme {
   static const Color secondary = Color(0xFFB85C2A);
 
   static ThemeData light() {
-    const canvas = Color(0xFFF7F6FB);
-    const ink = Color(0xFF14121F);
-    const wash = Color(0xFFEEECF6);
-    const line = Color(0xFFD8D5E3);
+    // Lighter tint of the GTG logo photo backdrop (#C7BEB3).
+    const canvas = Color(0xFFF1EEEC);
+    const ink = Color(0xFF1A1726);
+    const wash = Color(0xFFE8E5E0);
+    const line = Color(0xFFD6D1CB);
     // Mid indigo so filled controls stay readable on light surfaces.
     const primary = Color(0xFF2A215C);
 
@@ -23,8 +24,8 @@ abstract final class AppTheme {
           seedColor: brand,
           brightness: Brightness.light,
         ).copyWith(
-          surface: Colors.white,
-          surfaceContainerHighest: const Color(0xFFF0EEF7),
+          surface: const Color(0xFFFAF9F7),
+          surfaceContainerHighest: wash,
           primary: primary,
           onPrimary: Colors.white,
           secondary: secondary,
@@ -38,15 +39,15 @@ abstract final class AppTheme {
       ink: ink,
       wash: wash,
       line: line,
-      cardFill: Colors.white,
-      inputFill: Colors.white,
+      cardFill: const Color(0xFFFAF9F7),
+      inputFill: const Color(0xFFFAF9F7),
       textBase: ThemeData.light().textTheme,
     );
   }
 
   static ThemeData dark() {
     const canvas = Color(0xFF07060F);
-    const ink = Color(0xFFE8E6F0);
+    const ink = Color(0xFFF1EEEC);
     const wash = Color(0xFF16132A);
     const line = Color(0xFF2C2940);
     const surface = Color(0xFF12101C);

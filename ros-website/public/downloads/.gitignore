@@ -1,0 +1,14 @@
+# Community Edition binaries live here.
+
+# Expected filenames (see src/lib/downloads.ts):
+#   ros-community-linux-x86_64.AppImage
+#   ros-community-linux-x86_64.AppImage.sig
+#   ros-community-windows-x64.exe
+#   ros-community-windows-x64.exe.sig
+#   ros-community-android.apk
+#   ros-community-android.apk.sig
+
+# Do not commit large binaries unless intentionally publishing a release.
+*
+!.gitignore
+!README.md

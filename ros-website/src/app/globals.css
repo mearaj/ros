@@ -1,0 +1,177 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ============================================
+   GOTIGIN Theme Colors - Based on Logo
+   ============================================ */
+   
+/* To customize these colors based on your logo.png:
+   1. Use an image editor or online tool to extract the main colors from your logo
+   2. Replace the oklch() values below with your logo's actual colors
+   3. Light mode: background should use logo's BACKGROUND color, foreground uses logo's FOREGROUND color
+   4. Dark mode: background should use logo's FOREGROUND color, foreground uses logo's BACKGROUND color
+*/
+
+/* ============================================
+   LIGHT THEME (Default)
+   - Use your logo's BACKGROUND color for --background
+   - Use your logo's FOREGROUND color for --foreground
+   ============================================ */
+:root {
+  /*
+   * Light surfaces from the GTG logo photo backdrop (#C7BEB3),
+   * lightened for page canvas (#F1EEEC) and wash (#E8E5E0).
+   */
+  --background: #f1eeec;
+  --foreground: #1a1726;
+
+  --card: #faf9f7;
+  --card-foreground: var(--foreground);
+
+  --popover: #faf9f7;
+  --popover-foreground: var(--foreground);
+
+  /* Primary brand color — logo indigo */
+  --primary: #2a215c;
+  --primary-foreground: #ffffff;
+
+  --secondary: #e8e5e0;
+  --secondary-foreground: var(--foreground);
+
+  --muted: #e8e5e0;
+  --muted-foreground: #5c574f;
+
+  --accent: #e8e5e0;
+  --accent-foreground: var(--foreground);
+
+  --destructive: oklch(0.627 0.231 13.429);
+  --border: #d6d1cb;
+  --input: #d6d1cb;
+  --ring: var(--primary);
+
+  /* Chart colors */
+  --chart-1: oklch(0.675 0.244 264.376);
+  --chart-2: oklch(0.556 0.247 216.961);
+  --chart-3: oklch(0.439 0.248 176.761);
+  --chart-4: oklch(0.371 0.248 145.826);
+  --chart-5: oklch(0.269 0.248 118.62);
+
+  --radius: 0.625rem;
+
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e8e5e0;
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary);
+}
+
+/* ============================================
+   DARK THEME
+   - Use your logo's FOREGROUND color for --background
+   - Use your logo's BACKGROUND color for --foreground  
+   ============================================ */
+.dark {
+  /* Dark indigo canvas; light beige text from logo backdrop family */
+  --background: #1a1726;
+  --foreground: #f1eeec;
+
+  --card: #1a1726;
+  --card-foreground: var(--foreground);
+
+  --popover: #1a1726;
+  --popover-foreground: var(--foreground);
+
+  --primary: #2a215c;
+  --primary-foreground: #ffffff;
+
+  --secondary: #2a2740;
+  --secondary-foreground: var(--foreground);
+
+  --muted: #2a2740;
+  --muted-foreground: #c7beb3;
+
+  --accent: #2a2740;
+  --accent-foreground: var(--foreground);
+
+  --destructive: oklch(0.627 0.231 13.429);
+  --border: color-mix(in oklch, #f1eeec 18%, transparent);
+  --input: color-mix(in oklch, #f1eeec 22%, transparent);
+  --ring: var(--primary);
+
+  --chart-1: oklch(0.675 0.244 264.376);
+  --chart-2: oklch(0.556 0.247 216.961);
+  --chart-3: oklch(0.439 0.248 176.761);
+  --chart-4: oklch(0.371 0.248 145.826);
+  --chart-5: oklch(0.269 0.248 118.62);
+
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2a2740;
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: color-mix(in oklch, #f1eeec 18%, transparent);
+  --sidebar-ring: var(--primary);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
