@@ -1,14 +1,20 @@
-# Community Edition binaries live here.
+# Expected Community Edition release artifacts (see src/lib/downloads.ts).
+# These binaries and signatures are published with the website and should be
+# tracked when present:
+#   ros-linux-x86_64.AppImage
+#   ros-linux-x86_64.AppImage.sig
+#   ros-windows-x64.exe
+#   ros-windows-x64.exe.sig
+#   ros-android.apk
+#   ros-android.apk.sig
 
-# Expected filenames (see src/lib/downloads.ts):
-#   ros-community-linux-x86_64.AppImage
-#   ros-community-linux-x86_64.AppImage.sig
-#   ros-community-windows-x64.exe
-#   ros-community-windows-x64.exe.sig
-#   ros-community-android.apk
-#   ros-community-android.apk.sig
-
-# Do not commit large binaries unless intentionally publishing a release.
+# Ignore junk in this folder; keep docs and published release artifacts.
 *
 !.gitignore
 !README.md
+!ros-linux-x86_64.AppImage
+!ros-linux-x86_64.AppImage.sig
+!ros-windows-x64.exe
+!ros-windows-x64.exe.sig
+!ros-android.apk
+!ros-android.apk.sig

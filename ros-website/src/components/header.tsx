@@ -5,12 +5,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Menu, X, Moon, Sun } from "lucide-react";
+import { GitHubIcon } from "@/components/github-icon";
+import { site } from "@/lib/site";
 
 const navItems = [
   { title: "Overview", href: "/#overview" },
   { title: "Editions", href: "/#editions" },
   { title: "Download", href: "/#download" },
-  { title: "Gotigin", href: "https://gotigin.com", external: true },
+  { title: "Gotigin", href: site.gotiginUrl, external: true },
 ];
 
 export function Header() {
@@ -81,11 +83,21 @@ export function Header() {
               </Link>
             )
           )}
+          <a
+            href={site.githubRepoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-1 inline-flex size-10 items-center justify-center rounded-full text-foreground/80 hover:bg-muted"
+            aria-label="ROS on GitHub (open source)"
+            title="Open source on GitHub"
+          >
+            <GitHubIcon className="size-5" />
+          </a>
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleDarkMode}
-            className="ml-2 size-10 rounded-full"
+            className="ml-1 size-10 rounded-full"
             aria-label="Toggle dark mode"
           >
             {darkMode ? <Sun className="size-5" /> : <Moon className="size-5" />}
@@ -93,6 +105,16 @@ export function Header() {
         </nav>
 
         <div className="flex items-center space-x-2 md:hidden">
+          <a
+            href={site.githubRepoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex size-10 items-center justify-center rounded-full text-foreground/80 hover:bg-muted"
+            aria-label="ROS on GitHub (open source)"
+            title="Open source on GitHub"
+          >
+            <GitHubIcon className="size-5" />
+          </a>
           <Button
             variant="ghost"
             size="icon"
@@ -140,6 +162,16 @@ export function Header() {
                 </Link>
               )
             )}
+            <a
+              href={site.githubRepoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              <GitHubIcon className="size-4" />
+              GitHub · open source
+            </a>
           </div>
         </div>
       )}
@@ -174,8 +206,18 @@ export function Footer() {
             </Link>
             <p className="text-sm text-muted-foreground">
               A complete operating system for restaurants — offline-first,
-              secure, and built for daily operations.
+              secure, and built for daily operations. The product is open
+              source on GitHub.
             </p>
+            <a
+              href={site.githubRepoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:underline"
+            >
+              <GitHubIcon className="size-4" />
+              {site.githubRepoName}
+            </a>
           </div>
 
           <div className="space-y-4">
@@ -199,7 +241,17 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="https://gotigin.com"
+                  href={site.githubRepoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-muted-foreground hover:underline"
+                >
+                  GitHub (open source)
+                </a>
+              </li>
+              <li>
+                <a
+                  href={site.gotiginUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-muted-foreground hover:underline"
@@ -211,11 +263,21 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col items-center justify-between border-t pt-8 md:flex-row">
+        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t pt-8 md:flex-row">
           <p className="text-sm text-muted-foreground">
             © {currentYear} GOTIGIN SOFTWARE & HARDWARE PRIVATE LIMITED. All
             rights reserved.
           </p>
+          <a
+            href={site.githubRepoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:underline"
+            aria-label="Open source repository on GitHub"
+          >
+            <GitHubIcon className="size-4" />
+            Open source on GitHub
+          </a>
         </div>
       </div>
     </footer>

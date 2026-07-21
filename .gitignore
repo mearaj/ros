@@ -72,3 +72,21 @@ node_modules/
 verified-backups/
 **/diagnostics/
 /artifacts/
+
+# Production signing identities (generators create these locally)
+/secrets/signing/android/
+/secrets/signing/windows/
+/secrets/signing/gpg/
+!/secrets/signing/README.md
+
+# Downloaded packaging helpers
+/tools/appimagetool/
+/tools/sqlcipher-src/
+
+# Production SQLCipher binaries (MANIFEST.toml + README stay tracked)
+/third_party/sqlcipher/**/*.a
+/third_party/sqlcipher/**/*.lib
+/third_party/sqlcipher/**/*.so
+/third_party/sqlcipher/**/*.so.*
+/third_party/sqlcipher/**/*.dll
+/third_party/sqlcipher/**/SHA256SUMS

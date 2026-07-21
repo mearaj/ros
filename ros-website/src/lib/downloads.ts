@@ -43,7 +43,7 @@ export const platformAssets: PlatformAsset[] = [
   {
     id: "android",
     name: "Android",
-    status: "available",
+    status: "planned",
     binaryUrl: "/downloads/ros-android.apk",
     signatureUrl: "/downloads/ros-android.apk.sig",
     filename: "ros-android.apk",

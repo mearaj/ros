@@ -2,10 +2,10 @@
 # environment. It is intentionally ignored by Git; never commit a keystore,
 # its passwords, or an exported signing key.
 #
-# Use an absolute path to a private keystore owned by Gotigin's release
-# process. Android/iOS remain unsupported release targets until their secure
-# storage adapters and signed-device acceptance tests are complete.
-storeFile=/absolute/path/to/gotigin-restaurant-os-release.jks
+# Preferred flow: run ./scripts/generate-release-signing-keys.sh from the
+# repository root. That writes secrets/signing/android/ and copies this file
+# into place with paths relative to apps/ros/android/.
+storeFile=../../../secrets/signing/android/ros-release.p12
 storePassword=replace-in-controlled-build-environment
 keyAlias=gotigin-restaurant-os
 keyPassword=replace-in-controlled-build-environment

@@ -5,9 +5,12 @@ Restaurant Operating System (ROS). They are deliberately separate from the
 implementation roadmap: a capability is not available for sale or marketing
 until its acceptance and release evidence exists.
 
+**Reviewers:** [`openai-build-week/README.md`](../../openai-build-week/README.md) ·
+**Doc index:** [`docs/README.md`](../README.md)
+
 - [Community Edition](community.md) — free, local-first, one-branch ROS.
 - [Community Edition user guide](../runbooks/community-user-guide.md) — plain-language
-  setup and daily use walkthrough for owners and staff.
+  setup, daily use, and role quick guides.
 - [Community-first delivery contract](community-delivery-contract.md) — active
   work order, UX rules, regression safeguards, and the gate before
   Professional work resumes.

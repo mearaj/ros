@@ -20,7 +20,8 @@ Open [http://localhost:3000](http://localhost:3000).
 ## Downloads
 
 Community Edition binaries and signatures go in `public/downloads/`.
-See that folder’s README and `src/lib/downloads.ts`.
+Build/sign flow: [docs/runbooks/release-packaging.md](../docs/runbooks/release-packaging.md).
+Filenames: `src/lib/downloads.ts`.
 
 | Platform | Status |
 |----------|--------|
@@ -32,7 +33,9 @@ See that folder’s README and `src/lib/downloads.ts`.
 
 ## Editions
 
-- **Community** — free, downloadable now
+Canonical definitions: [docs/editions/](../docs/editions/README.md).
+
+- **Community** — free, downloadable when Release artifacts are published
 - **Professional** — coming soon (trial/paid handled in-product)
 - **Enterprise** — paid, coming soon
 

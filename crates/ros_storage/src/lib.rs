@@ -2336,7 +2336,10 @@ fn open_or_create_with_key_store(
     slot: &DatabaseKeySlot,
 ) -> Result<LocalDatabase, DatabaseBootstrapError> {
     let _bootstrap_lock = acquire_bootstrap_lock(path)?;
-    let database_exists = path.exists();
+    // A zero-byte (or missing) file is not a usable encrypted database. SQLite
+    // CREATE can leave an empty file after a failed first-open configure step;
+    // treating that as "present" poisons bootstrap into Storage forever.
+    let database_exists = usable_encrypted_database_present(path);
     let stored_key = key_store
         .load(slot)
         .map_err(DatabaseBootstrapError::KeyStore)?;
@@ -2347,7 +2350,42 @@ fn open_or_create_with_key_store(
         }
         (true, None) => Err(DatabaseBootstrapError::DatabaseKeyMissing),
         (false, Some(_)) => Err(DatabaseBootstrapError::ExistingKeyWithoutDatabase),
-        (false, None) => create_fresh_database_with_key_store(path, key_store, slot),
+        (false, None) => {
+            remove_incomplete_database_artifacts(path);
+            create_fresh_database_with_key_store(path, key_store, slot)
+        }
+    }
+}
+
+/// True only when a non-empty primary database file is on disk.
+#[cfg(feature = "platform-keyring")]
+fn usable_encrypted_database_present(path: &Path) -> bool {
+    match fs::metadata(path) {
+        Ok(metadata) => metadata.is_file() && metadata.len() > 0,
+        Err(_) => false,
+    }
+}
+
+#[cfg(feature = "platform-keyring")]
+fn remove_incomplete_database_artifacts(path: &Path) {
+    for artifact in local_database_artifact_paths(path) {
+        match fs::metadata(&artifact) {
+            Ok(metadata) if metadata.is_file() && metadata.len() == 0 => {
+                let _ = fs::remove_file(&artifact);
+            }
+            Ok(metadata)
+                if metadata.is_file()
+                    && artifact != path
+                    && !usable_encrypted_database_present(path) =>
+            {
+                // Sidecars without a usable primary are leftover noise.
+                let _ = fs::remove_file(&artifact);
+            }
+            _ => {}
+        }
+    }
+    if path.exists() && !usable_encrypted_database_present(path) {
+        let _ = fs::remove_file(path);
     }
 }
 
@@ -2386,7 +2424,7 @@ fn reset_orphaned_key_and_create_with_key_store(
     slot: &DatabaseKeySlot,
 ) -> Result<LocalDatabase, DatabaseBootstrapError> {
     let _bootstrap_lock = acquire_bootstrap_lock(path)?;
-    if path.exists() {
+    if usable_encrypted_database_present(path) {
         return Err(DatabaseBootstrapError::Storage(
             StorageError::InvalidPersistedData(
                 "refusing to clear a device key while an encrypted database file is present"
@@ -2394,6 +2432,8 @@ fn reset_orphaned_key_and_create_with_key_store(
             ),
         ));
     }
+    // Incomplete zero-byte CREATE leftovers must not block recovery.
+    remove_incomplete_database_artifacts(path);
     let stored_key = key_store
         .load(slot)
         .map_err(DatabaseBootstrapError::KeyStore)?;
@@ -2623,12 +2663,25 @@ fn create_fresh_database_with_key_store(
         ))?;
 
     if !generated_key.same_as(&verified_key) {
+        let _ = key_store.clear(slot);
         return Err(DatabaseBootstrapError::KeyStore(
             KeyStoreError::WriteVerificationFailed,
         ));
     }
 
-    LocalDatabase::open(path, &generated_key).map_err(DatabaseBootstrapError::Storage)
+    match LocalDatabase::open(path, &generated_key) {
+        Ok(database) => Ok(database),
+        Err(error) => {
+            // Connection::open(CREATE) can leave an incomplete file before keying
+            // / migration finishes. Roll the key and any artifacts back so the
+            // next bootstrap is a clean create, not a poisoned open.
+            for artifact in local_database_artifact_paths(path) {
+                let _ = fs::remove_file(artifact);
+            }
+            let _ = key_store.clear(slot);
+            Err(DatabaseBootstrapError::Storage(error))
+        }
+    }
 }
 
 fn acquire_bootstrap_lock(path: &Path) -> Result<File, DatabaseBootstrapError> {
@@ -18142,6 +18195,22 @@ mod tests {
         .expect("orphaned key can be cleared for an explicit fresh setup");
         open_or_create_with_key_store(&key_without_database_path, &key_only_store, &slot)
             .expect("fresh setup reopens after orphaned-key reset");
+
+        // Zero-byte CREATE leftovers must not look like a real encrypted DB.
+        let empty_file_path = temp.path().join("empty.db");
+        fs::write(&empty_file_path, b"").expect("empty placeholder");
+        let empty_file_store = MemoryKeyStore::default();
+        empty_file_store
+            .store_new(&slot, &DatabaseKey::from_bytes([7; 32]))
+            .expect("test key stored");
+        assert!(matches!(
+            open_or_create_with_key_store(&empty_file_path, &empty_file_store, &slot),
+            Err(DatabaseBootstrapError::ExistingKeyWithoutDatabase)
+        ));
+        reset_orphaned_key_and_create_with_key_store(&empty_file_path, &empty_file_store, &slot)
+            .expect("empty placeholder plus orphaned key can be reset for fresh setup");
+        open_or_create_with_key_store(&empty_file_path, &empty_file_store, &slot)
+            .expect("fresh database opens after empty-file recovery");
     }
 
     #[test]

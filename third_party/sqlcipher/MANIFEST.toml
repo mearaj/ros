@@ -1,13 +1,18 @@
-# Placeholder only — not a publishable artifact set.
-# Replace reviewed_by / reviewed_at_utc / sha256 values when binaries land.
 schema_version = 1
 sqlcipher_version = "4.17.0"
-openssl_fips_note = "awaiting reviewed production build"
-reviewed_by = ""
-reviewed_at_utc = ""
+openssl_fips_note = "OpenSSL via OPENSSL_ROOT_DIR; not FIPS-validated"
+reviewed_by = "Gotigin engineering (pinned official SQLCipher 4.17.0 self-build)"
+reviewed_at_utc = "2026-07-21T17:00:32Z"
 
-# [[artifact]]
-# target = "x86_64-unknown-linux-gnu"
-# path = "linux-x86_64/libsqlcipher.a"
-# sha256 = ""
-# provenance_url = ""
+[[artifact]]
+target = "x86_64-unknown-linux-gnu"
+path = "linux-x86_64/libsqlcipher.so"
+sha256 = "15480e97329e7267332901dbea147dd8ad32e073b76600d5294848f821d48f4a"
+provenance_url = "https://github.com/sqlcipher/sqlcipher/releases/tag/v4.17.0"
+
+[[artifact]]
+target = "x86_64-pc-windows-msvc"
+path = "windows-x86_64/sqlcipher.lib"
+sha256 = "0b139f91d685d520067c6717c7c0ef3eb48720a3442ad676ad7bcb30def3ddfd"
+provenance_url = "https://github.com/sqlcipher/sqlcipher/releases/tag/v4.17.0"
+

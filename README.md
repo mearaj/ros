@@ -4,31 +4,22 @@
 
 Restaurant Operating System (ROS) is an enterprise-grade commercial product developed by Mearaj Bhagad, Founder of GOTIGIN SOFTWARE & HARDWARE PRIVATE LIMITED, during OpenAI Build Week. Unlike a typical hackathon prototype, ROS is designed as a production-ready platform and is used to support our real-world restaurant operations. The project was developed with Rust, Flutter, ChatGPT 5.6, Codex, and other AI assistants to accelerate engineering while maintaining production-quality standards.
 
+**OpenAI Build Week reviewers:** start at
+[`openai-build-week/README.md`](openai-build-week/README.md).
+
+**Documentation index:** [`docs/README.md`](docs/README.md).
+
 ## Product editions
 
 - **Community** — Free forever, one branch, unlimited local restaurant use.
-- **Professional Evaluation** — Planned 14-day access to the Professional
-  capability set after explicit activation.
+- **Professional Evaluation** — Planned 14-day access to the Professional capability set after explicit activation.
 - **Professional Paid** — Planned one-year entitlement for up to five branches.
-- **Enterprise Paid** — Planned one-year entitlement with branch capacity
-  selected in the commercial agreement.
+- **Enterprise Paid** — Planned one-year entitlement with branch capacity selected in the commercial agreement.
 
-These are the product's commercial definitions, not a claim that every edition
-can be activated from this repository today. Community's local foundation is
-implemented. Evaluation activation, signed paid entitlements, multi-branch
-administration, and a deployed cloud service remain release-gated Professional
-and Enterprise work; those editions must not be sold or represented as live
-until their deployment and acceptance evidence exists.
-
-An entitlement changes cloud and coordination capabilities; it never deletes
-customer data or makes a restaurant unable to operate its selected local
-branch.
-
-The edition behavior and release boundaries are defined in
-[docs/editions](docs/editions/README.md). Community Edition is the current
-delivery focus across Android, iOS/iPadOS, Linux, Windows, and macOS; a target
-is not described as release-supported until its platform-specific acceptance
-and publication gates have passed.
+Canonical rules and acceptance gates:
+[docs/editions/](docs/editions/README.md).
+Community is the active delivery focus; Professional and Enterprise must not be
+sold or represented as live until their release evidence exists.
 
 ## Architecture
 
@@ -99,9 +90,14 @@ Provider-neutral taxes and manager/owner discounts are implemented through the
 local pricing contract. Dual-person correction approval, suppliers/purchase
 documents, recipes/BOM deduction, ESC/POS+PDF receipt encoding, and portable
 recovery envelopes are now in the Community storage surface. Remaining
-publication blockers include reviewed production SQLCipher artifacts,
-code-signing identities, physical printer acceptance, GCP credential
-provisioning, and the Section 15 release gates in [PLAN.md](PLAN.md).
+publication blockers include reviewed production SQLCipher artifacts under
+`third_party/sqlcipher/`, Authenticode/store identities for public trust,
+physical printer acceptance, GCP credential provisioning, and the Section 15
+release gates in [PLAN.md](PLAN.md).
+
+Signed website download packaging (Linux AppImage, Windows 10+ installer,
+Android APK) is documented in
+[docs/runbooks/release-packaging.md](docs/runbooks/release-packaging.md).
 
 See [PLAN.md](PLAN.md) for the six-major-stages release plan and [docs/adr](docs/adr)
 for architecture decisions. The Stage 1 developer handoff — including local run,
@@ -119,17 +115,13 @@ build.
 
 ## Security note
 
-The Development build uses the bundled SQLCipher path for repeatable Linux
-verification. Cargokit maps profile/release builds to the separate
-`production-sqlcipher` feature graph. That graph is deliberately build-blocked
-today, so it cannot discover or link an arbitrary system SQLCipher library.
-Public Release packaging remains blocked until the reviewed, pinned SQLCipher
-4.17.x artifact has controlled checksum/provenance evidence, controlled linker
-configuration, and signed desktop secure-store smoke tests, alongside the
-other [release gates](PLAN.md#15-non-negotiable-release-gates).
-The current secure-store adapter targets desktop OS stores; Android and iOS
-provisioning is blocked in code until their native secure-store adapter and
-device smoke tests are accepted.
+Development builds use the bundled SQLCipher path. Release/profile builds use
+the fail-closed `production-sqlcipher` path
+([sqlcipher-artifact-manifest.md](docs/runbooks/sqlcipher-artifact-manifest.md),
+[release-packaging.md](docs/runbooks/release-packaging.md),
+[PLAN.md §15](PLAN.md#15-non-negotiable-release-gates)).
+Desktop OS key stores are implemented; Android/iOS remain blocked until
+secure-store adapters and device smoke tests are accepted.
 
 ## License and trademarks
 

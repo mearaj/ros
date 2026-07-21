@@ -262,10 +262,11 @@ cd apps/ros
 flutter build linux --release
 ```
 
-The current production feature fails at the explicit artifact gate before
-native linkage. A reviewed artifact manifest, checksum/provenance verifier,
-and controlled linker configuration must be implemented before this can ever
-produce an accepted Release artifact.
+The current production feature fails closed when the reviewed artifact
+manifest is missing or incomplete. When reviewed libraries and checksums are
+present, `crates/ros_storage/build.rs` verifies SHA-256 and emits explicit
+linker directives. A successful `production-sqlcipher` build without those
+controlled artifacts would be a security regression, not progress.
 
 To inspect that gate without invoking the Flutter packaging tool, run the
 feature graph with Development defaults disabled:
@@ -275,15 +276,15 @@ cargo check --locked -p ros_storage --no-default-features \
   --features production-sqlcipher,platform-keyring
 ```
 
-It must fail with the explicit controlled-artifact refusal from
-`crates/ros_storage/build.rs`; a successful command here would be a security
-regression, not progress.
+Without reviewed artifacts this must fail with the explicit controlled-artifact
+refusal from `crates/ros_storage/build.rs`.
 
 Do not work around that failure with a system SQLite library, a development
 feature, environment-held key material, or an unsigned ad-hoc library. The
 release checklist is in [PLAN.md](../../PLAN.md#15-non-negotiable-release-gates)
 and the encryption decision records the required artifact controls in
-[ADR 0002](../adr/0002-local-database-encryption.md).
+[ADR 0002](../adr/0002-local-database-encryption.md). Signed website packaging
+steps are in [release-packaging.md](release-packaging.md).
 
 Before a Release build can be accepted, the team must at least:
 

@@ -15,7 +15,7 @@ rusqlite = { version = "0.40.1", default-features = false }
 # called. It receives the same SQLCipher feature as ros_storage.
 default = ["development-bundled-sqlcipher"]
 development-bundled-sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
-production-sqlcipher = ["rusqlite/sqlcipher"]
+production-sqlcipher = ["rusqlite/sqlcipher", "rusqlite/buildtime_bindgen"]
 
 [lints.rust]
 # `unsafe` is denied by default, then allowed for the single reviewed FFI call

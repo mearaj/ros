@@ -20,13 +20,19 @@ credential owner. Work must continue on all other items.
 1. **GCP billing account / project credentials** — create the real
    development/staging/production projects and wire secrets into the deploy
    pipeline. OpenTofu modules under `infra/` are ready for that binding.
-2. **Production SQLCipher 4.17.x artifacts** — place reviewed platform binaries
-   and checksums under `third_party/sqlcipher/` per
-   [sqlcipher-artifact-manifest.md](sqlcipher-artifact-manifest.md). Builds
-   remain fail-closed until those files exist.
-3. **Code-signing identities and store accounts** — Apple/Windows/Linux signing
-   material for publication; see
-   [release-verification.md](release-verification.md).
+2. **Production SQLCipher 4.17.x artifacts** — Linux x86_64 shared library is
+   provisioned via `./scripts/provision-sqlcipher-artifacts.sh` and listed in
+   `third_party/sqlcipher/MANIFEST.toml`. Windows/macOS artifacts still need
+   per-host provision (`.\scripts\provision-sqlcipher-artifacts.ps1` on the
+   Win11 VM). Builds remain fail-closed for targets without a reviewed
+   artifact; see [sqlcipher-artifact-manifest.md](sqlcipher-artifact-manifest.md).
+3. **Code-signing identities and store accounts** — Linux GnuPG + Android
+   PKCS#12 exist under `secrets/signing/` for packaging; Windows Authenticode
+   PFX is generated on the Win11 VM
+   (`.\scripts\generate-release-signing-keys.ps1`). Apple/store accounts and
+   commercially trusted Windows certs remain before public SmartScreen/trust;
+   see [release-verification.md](release-verification.md) and
+   [release-packaging.md](release-packaging.md).
 4. **Physical Epson TM-T82X class unit** — lab acceptance evidence before
    marketing claims beyond “ESC/POS profile implemented”.
 5. **Legal/compliance review** — still required before GST, e-invoicing, PCI,

@@ -22,6 +22,9 @@ sha2 = "=0.10.9"
 url = "=2.5.8"
 zeroize = "=1.9.0"
 
+[build-dependencies]
+sha2 = "=0.10.9"
+
 [dev-dependencies]
 tempfile = "3.27.0"
 
@@ -37,6 +40,7 @@ development-bundled-sqlcipher = [
 production-sqlcipher = [
     "ros_sqlcipher_ffi/production-sqlcipher",
     "rusqlite/sqlcipher",
+    "rusqlite/buildtime_bindgen",
 ]
 platform-keyring = ["dep:getrandom", "dep:keyring"]
 

@@ -81,8 +81,8 @@ export function ProductDownload() {
         <p className="flex items-start gap-2 text-sm text-muted-foreground">
           <FileKey className="mt-0.5 size-4 shrink-0" />
           <span>
-            A detached signature file is provided so you can verify the
-            download before installing. Community, Professional, and
+            Download the GPG detached signature (`.sig`) and verify with our
+            public key before installing. Community, Professional, and
             Enterprise capabilities are unlocked during setup — not by choosing
             a separate installer.
           </span>
@@ -109,7 +109,7 @@ export function ProductDownload() {
               )}
             >
               <FileKey className="size-4" />
-              Signature
+              GPG signature (.sig)
             </a>
           </>
         ) : (

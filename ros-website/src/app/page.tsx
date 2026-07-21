@@ -12,7 +12,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { editions } from "@/lib/downloads";
+import { site } from "@/lib/site";
 import { cn } from "@/lib/utils";
+import { GitHubIcon } from "@/components/github-icon";
 
 export default function Home() {
   return (
@@ -65,6 +67,19 @@ export default function Home() {
                   View Editions
                 </Link>
               </div>
+              <p className="pt-1 text-sm text-muted-foreground">
+                Open source on{" "}
+                <a
+                  href={site.githubRepoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 font-medium text-foreground underline-offset-4 hover:underline"
+                >
+                  <GitHubIcon className="size-3.5" />
+                  GitHub
+                </a>
+                .
+              </p>
             </div>
           </div>
         </div>
@@ -133,6 +148,16 @@ export default function Home() {
             <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
               Get Restaurant Operating System for your device. Setup walks you
               through activation and applies the right plan for your restaurant.
+              Source code is open on{" "}
+              <a
+                href={site.githubRepoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                GitHub
+              </a>
+              .
             </p>
           </div>
           <ProductDownload />

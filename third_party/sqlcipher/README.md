@@ -1,11 +1,7 @@
 # SQLCipher production artifacts
 
-This directory holds reviewed SQLCipher 4.17.x static libraries for release
-builds. It intentionally contains **no** binaries until Gotigin places
-checksum-verified artifacts here.
+Reviewed SQLCipher 4.17.x static libraries for Release builds go here.
+Binaries are gitignored until Gotigin places checksum-verified artifacts.
 
-See [docs/runbooks/sqlcipher-artifact-manifest.md](../../docs/runbooks/sqlcipher-artifact-manifest.md).
-
-Placeholder `MANIFEST.toml` documents the schema; `build.rs` treats a missing
-or incomplete artifact set as a hard error when `production-sqlcipher` is
-enabled.
+Canonical policy and `MANIFEST.toml` schema:
+[docs/runbooks/sqlcipher-artifact-manifest.md](../../docs/runbooks/sqlcipher-artifact-manifest.md).

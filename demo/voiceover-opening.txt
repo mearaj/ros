@@ -1,0 +1,9 @@
+Hi. I am May Raaj Bhagaar, founder of Gotigin. This is Restaurant Operating System — a local-first restaurant operating system for one branch.
+
+I built it during OpenAI Build Week with Codex and GPT 5.6.
+
+Here is the product website. Download a signed Linux AppImage or Windows installer. No account is required for Community Edition.
+
+Now the app. Choose Community, then Hub. Take an order on POS, send it to kitchen, advance the ticket, then record payment. Data stays encrypted on this device.
+
+Flutter talks to Rust. Codex accelerated encryption and release packaging. GPT 5.6 helped with architecture and the Community delivery contract.

@@ -4,6 +4,10 @@
 
 > This document defines the initial product vision, licensing strategy,
 > and engineering philosophy.
+>
+> **Edition rules (Community / Professional / Enterprise)** live in
+> [`docs/editions/`](docs/editions/README.md). Do not treat this file as the
+> edition source of truth.
 
 ## Product Vision
 
@@ -33,112 +37,22 @@ This product is intended to become the flagship commercial product of
 
 ------------------------------------------------------------------------
 
-# Product Editions
+## Product editions (summary)
 
-The edition descriptions below are product and licensing targets. They are not
-an implementation-status table. The repository currently implements the
-offline Community foundation and disabled Professional sync foundations;
-14-day evaluation activation, signed annual entitlements, multi-branch
-administration, production cloud deployment, and Enterprise commercial
-controls remain gated work. No Professional or Enterprise capability should be
-marketed as available until its release evidence exists.
+Canonical definitions, acceptance gates, and platform claims:
 
-## Community Edition (Free Forever)
+- [docs/editions/README.md](docs/editions/README.md)
+- [Community](docs/editions/community.md) ·
+  [Professional](docs/editions/professional.md) ·
+  [Enterprise](docs/editions/enterprise.md)
 
-Target: - Independent restaurants - Cafes - Small restaurants
+Commercial defaults (grace, branch ceilings, Safe Mode):
+[ADR 0009](docs/adr/0009-commercial-edition-terms.md).
 
-Features:
+Edition topology and switching:
+[ADR 0010](docs/adr/0010-edition-data-topology-and-switching.md).
 
--   Single branch
--   Unlimited usage
--   Unlimited menu items
--   Unlimited orders
--   Unlimited invoices
--   Unlimited tables
--   Unlimited employees
--   Inventory
--   Purchases
--   Expenses
--   Reports
--   Kitchen Display System (KDS)
--   Offline-first
--   Local database
-
-Limitations:
-
--   Maximum 1 branch
--   No cloud synchronization
--   No centralized owner dashboard
-
-This edition should feel complete and should never feel like a crippled
-trial.
-
-------------------------------------------------------------------------
-
-## Professional Evaluation
-
-Duration: - 14 Days
-
-Purpose:
-
-Allow restaurants to evaluate every Professional feature.
-
-Features:
-
--   Up to 5 branches
--   Cloud synchronization
--   Central owner dashboard
--   Cross-branch reporting
--   Automatic backups
--   Remote management
--   Advanced user roles
--   Priority support
-
-After evaluation:
-
-Restaurants that only need a single branch should be able to continue
-using Community Edition.
-
-Do not lock customers out of their data.
-
-------------------------------------------------------------------------
-
-## Professional Edition
-
-Annual subscription.
-
-Includes every Professional capability.
-
-Maximum: - 5 branches
-
-Designed for growing restaurant businesses.
-
-------------------------------------------------------------------------
-
-## Enterprise Edition
-
-Annual subscription.
-
-Pricing depends on:
-
--   Number of branches
--   Deployment requirements
--   Support level
--   Custom integrations
-
-Possible enterprise capabilities:
-
--   Unlimited branches
--   Organization analytics
--   Dedicated support
--   SLA
--   On-premise deployment
--   SSO
--   Custom APIs
-
-------------------------------------------------------------------------
-
-# Target Capability Matrix
+Capability matrix (targets, not an implementation-status table):
 
   Capability            Community   Professional   Enterprise
   --------------------- ----------- -------------- ------------

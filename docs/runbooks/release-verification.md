@@ -202,7 +202,7 @@ than bypassed in code.
 | Production SQLCipher artifact policy | [sqlcipher-artifact-manifest.md](sqlcipher-artifact-manifest.md), `third_party/sqlcipher/` |
 | Dependency inventory baseline | `./scripts/generate-dependency-evidence.sh` |
 | Artifact SBOM placeholder gate | `./scripts/generate-sbom-placeholder.sh` |
-| Owner/cashier/kitchen guides | [owner-guides.md](owner-guides.md) |
+| Owner/cashier/kitchen guides | [community-user-guide.md](community-user-guide.md) (role quick guides section) |
 | Accessibility smoke checklist | [accessibility-acceptance.md](accessibility-acceptance.md) |
 | Professional sync client | `crates/ros_sync_client` |
 | Owner dashboard | `apps/owner-dashboard/` |
