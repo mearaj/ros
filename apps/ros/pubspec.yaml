@@ -35,7 +35,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   crypto: ^3.0.7
-  file_picker: ^11.0.2
+  file_picker: ^12.0.0
   path_provider: ^2.1.6
   rust_lib_ros:
     path: rust_builder
