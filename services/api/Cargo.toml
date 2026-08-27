@@ -6,7 +6,7 @@ license.workspace = true
 
 [dependencies]
 axum = "0.8"
-base64 = "=0.22.1"
+base64 = "=0.23.1"
 jsonwebtoken = { version = "=11.0.0", default-features = false, features = ["aws_lc_rs", "use_pem"] }
 ros_core = { path = "../../crates/ros_core" }
 serde = { version = "1", features = ["derive"] }
