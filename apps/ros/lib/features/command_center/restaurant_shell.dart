@@ -2341,11 +2341,10 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      final result = await FilePicker.pickFiles(
+                      final file = await FilePicker.pickFile(
                         type: FileType.any,
-                        allowMultiple: false,
                       );
-                      final path = result?.files.single.path;
+                      final path = file?.path;
                       if (path != null) {
                         setDialogState(() => backupPath = path);
                       }
@@ -2360,11 +2359,10 @@ class _StaffSecurityGateState extends State<_StaffSecurityGate> {
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      final result = await FilePicker.pickFiles(
+                      final file = await FilePicker.pickFile(
                         type: FileType.any,
-                        allowMultiple: false,
                       );
-                      final path = result?.files.single.path;
+                      final path = file?.path;
                       if (path != null) {
                         setDialogState(() => envelopePath = path);
                       }
@@ -4675,16 +4673,13 @@ class _CategoryManagerState extends State<_CategoryManager> {
     CommunityCategoryView category,
   ) async {
     try {
-      final result = await FilePicker.pickFiles(
-        allowMultiple: false,
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
-        withData: true,
       );
-      if (!mounted || result == null) return;
-      final file = result.files.single;
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty) {
+      if (!mounted || file == null) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) {
         _showImageMessage(
           'That image could not be read. Please choose a PNG, JPEG, or WebP image.',
         );
@@ -4788,19 +4783,16 @@ class _CategoryManagerState extends State<_CategoryManager> {
     }
 
     try {
-      final result = await FilePicker.pickFiles(
-        allowMultiple: false,
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
-        withData: true,
       );
-      if (!mounted || result == null) {
+      if (!mounted || file == null) {
         return;
       }
 
-      final file = result.files.single;
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty) {
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) {
         _showImageMessage(
           'That image could not be read. Please choose a PNG, JPEG, or WebP image.',
         );
@@ -7424,15 +7416,15 @@ class _ProductList extends StatelessWidget {
     BuildContext context,
     CommunityProductView product,
   ) async {
-    final result = await FilePicker.pickFiles(
-      allowMultiple: false,
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
-      withData: true,
     );
-    final file = result?.files.singleOrNull;
-    final bytes = file?.bytes;
-    if (bytes == null || bytes.isEmpty) {
+    if (file == null) {
+      return;
+    }
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
       return;
     }
     final prepared = await prepareCommunityMenuImage(imageBytes: bytes);
@@ -9866,11 +9858,10 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      final result = await FilePicker.pickFiles(
+                      final file = await FilePicker.pickFile(
                         type: FileType.any,
-                        allowMultiple: false,
                       );
-                      final path = result?.files.single.path;
+                      final path = file?.path;
                       if (path != null) {
                         setDialogState(() => backupPath = path);
                       }
@@ -9885,11 +9876,10 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      final result = await FilePicker.pickFiles(
+                      final file = await FilePicker.pickFile(
                         type: FileType.any,
-                        allowMultiple: false,
                       );
-                      final path = result?.files.single.path;
+                      final path = file?.path;
                       if (path != null) {
                         setDialogState(() => envelopePath = path);
                       }
@@ -10467,7 +10457,8 @@ class _ReportsWorkspaceState extends State<_ReportsWorkspace> {
         type: FileType.custom,
         allowedExtensions: const ['csv'],
         bytes: export.csvBytes,
-        lockParentWindow: true,
+        windowsOptions: const WindowsOptions(lockParentWindow: true),
+        linuxOptions: const LinuxOptions(lockParentWindow: true),
       );
       if (!mounted) {
         return;
@@ -11037,7 +11028,8 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
         type: FileType.custom,
         allowedExtensions: const ['json'],
         bytes: pack.jsonBytes,
-        lockParentWindow: true,
+        windowsOptions: const WindowsOptions(lockParentWindow: true),
+        linuxOptions: const LinuxOptions(lockParentWindow: true),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
