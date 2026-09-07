@@ -12,7 +12,7 @@ description = "Encrypted local storage for Gotigin Restaurant Operating System"
 aes-gcm = "=0.11.1"
 argon2 = "=0.6.0"
 getrandom = { version = "=0.4.3", optional = true }
-keyring = { version = "=4.1.5", default-features = false, features = ["v1"], optional = true }
+keyring = { version = "=4.2.0", default-features = false, features = ["v1"], optional = true }
 rand_core = { version = "=0.6.4", features = ["getrandom"] }
 ros_core = { path = "../ros_core" }
 ros_sqlcipher_ffi = { path = "../ros_sqlcipher_ffi", default-features = false }
