@@ -22,7 +22,7 @@ jobs:
     name: Scan current dependency graph
     if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     # OSV-Scanner reusable workflow pinned to an immutable reviewed revision.
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@ffa0a5f39214d80778c9b494822d94d0d9668458
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@8e5cf47b818121e8b405931c82126c2630b0b20d
     with:
       scan-args: |-
         --recursive
