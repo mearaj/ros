@@ -18,7 +18,7 @@ tokio = { version = "=1.53.1", features = ["fs", "macros", "rt-multi-thread", "n
 tracing = { version = "=0.1.44", default-features = false, features = ["attributes", "std"] }
 tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt", "json", "std"] }
 url = "=2.5.8"
-uuid = { version = "=1.24.0", features = ["serde", "v7"] }
+uuid = { version = "=1.26.0", features = ["serde", "v7"] }
 
 [dev-dependencies]
 ed25519-dalek = { version = "=2.2.0", features = ["pem", "pkcs8", "rand_core"] }
