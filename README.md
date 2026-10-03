@@ -1,3 +1,9 @@
+# Archived
+This repository is archived now and a new version of it is created using makepad version 2 of rust and replacing flutter completely.
+The following is the link
+[Kuumkaj](https://github.com/gotigin/kumkaj)
+
+
 # Gotigin Restaurant Operating System
 
 ![Gotigin Restaurant Operating System — cross-platform POS, kitchen display, and dashboard](docs/assets/ros-banner.jpg)
